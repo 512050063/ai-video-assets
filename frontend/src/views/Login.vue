@@ -38,9 +38,9 @@
 
     <!-- 主内容区 -->
     <div class="relative z-10 min-h-screen flex justify-center">
-      <div class="w-full max-w-[1760px] mx-auto px-8 flex items-stretch">
+      <div class="w-full max-w-[1240px] mx-auto px-6 flex items-stretch justify-between gap-10">
         <!-- 左：品牌区 -->
-        <div class="hidden lg:flex lg:w-[48%] py-14 flex-col justify-center login-brand-pane">
+        <div class="hidden lg:flex w-[600px] py-14 flex-col justify-center login-brand-pane">
           <div class="w-full max-w-[620px] ml-2">
             <!-- Logo + 标题 -->
             <div class="flex items-center mb-6 login-brand-title">
@@ -113,7 +113,7 @@
         </div>
 
         <!-- 右：登录卡 -->
-        <div class="flex-1 flex items-center justify-center lg:justify-end py-14 relative">
+        <div class="w-full lg:w-[430px] flex items-center justify-center py-14 relative">
           <div class="w-full max-w-[430px] relative z-10 login-card-panel">
             <div class="lg:hidden flex items-center mb-8">
               <div class="w-10 h-10 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
@@ -587,12 +587,12 @@ async function submit() {
   width: 168px;
   padding: 12px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.38);
+  border: 1px solid rgba(255, 255, 255, 0.55);
   box-shadow:
-    0 20px 44px -18px rgba(59, 73, 158, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  backdrop-filter: blur(8px);
+    0 20px 44px -18px rgba(59, 73, 158, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(6px);
   animation: loginDecoFloat 9s ease-in-out infinite;
 }
 
@@ -634,7 +634,7 @@ async function submit() {
   left: 3.5%;
   top: 12%;
   --rot: -7deg;
-  opacity: 0.72;
+  opacity: 0.34;
 }
 
 .deco-2 {
@@ -642,7 +642,7 @@ async function submit() {
   bottom: 13%;
   --rot: 5deg;
   width: 150px;
-  opacity: 0.62;
+  opacity: 0.3;
   animation-delay: -3s;
 }
 
@@ -651,7 +651,7 @@ async function submit() {
   top: 13%;
   --rot: 9deg;
   width: 146px;
-  opacity: 0.55;
+  opacity: 0.28;
   animation-delay: -5.5s;
 }
 
@@ -660,7 +660,7 @@ async function submit() {
   bottom: 14%;
   --rot: -5deg;
   width: 176px;
-  opacity: 0.5;
+  opacity: 0.26;
   animation-delay: -1.8s;
 }
 
