@@ -49,7 +49,32 @@ npm run dev
 
 生产部署还需收紧 `main.py` 中的 CORS 配置，并修改默认管理员密码。
 
-**抖音扫码登录是唯一需要图形环境的接口**：后端会拉起有头 Chromium 窗口供扫码，因此部署主机必须同时具备 `backend/collector/douyin_collect.mjs`、`frontend/node_modules`（含 playwright）和已安装的 Chromium，且运行后端进程的用户能打开图形窗口；Linux 无桌面时需配置 Xvfb。依赖缺失时接口会明确报错，**不会创建空账号也不会误标已登录**。
+## 部署环境要求
+
+### 基础运行（必需）
+
+| 组件 | 要求 | 用途 / 缺失后果 |
+| --- | --- | --- |
+| Python | ≥3.9（本机 3.13.14） | 后端运行；`pip install -r backend/requirements.txt` |
+| Node.js | ≥18（本机 v22.22.2） | 前端构建与开发服务 |
+| 前端依赖 | `cd frontend && npm install` | 构建前端；缺失则无法启动前端与抖音采集 |
+| 数据库 | `backend/ai_video_assets.db` | 随仓库提供；缺失会自动重建空库与超管账号 |
+| 上传目录 | `backend/uploads/` | 图标与用户图片；缺失则图片 404 |
+
+### 抖音自动化（扫码登录 / 自动采集时需要）
+
+| 条件 | 要求 | 缺失时的表现 |
+| --- | --- | --- |
+| 采集脚本 | `backend/collector/douyin_collect.mjs` | 扫码接口返回「浏览器采集组件缺失」 |
+| Playwright | `frontend/node_modules` 内，或 `AVM_NODE_MODULES` 指向独立目录 | 扫码接口返回「浏览器采集依赖缺失」 |
+| Chromium | `cd frontend && npx playwright install chromium` | 浏览器无法启动 |
+| 图形会话 | 运行后端的用户能打开有头窗口；Linux 无桌面需 Xvfb | 无弹窗、无法扫码 |
+
+依赖缺失时接口会明确报错并给出 `manual_hint`，**不会创建空账号，也不会把账号误标为「已登录」**。
+
+### 前端反代（Nginx 托管 dist 时）
+
+`/api` 与 `/uploads` 必须反代到后端；上传体积限制需 ≥ 后端设定。完整资产清单、数据库迁移步骤与自检清单见 `项目文档.md` 第 17 章。
 
 ## 验证
 
