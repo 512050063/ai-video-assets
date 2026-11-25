@@ -1,18 +1,14 @@
 @echo off
 setlocal enabledelayedexpansion
+title AI Video Assets - LAN One-Click Start
 cd /d "%~dp0"
 
-title AI Video Assets Launcher
-echo ==========================================================
-echo   AI Video Assets - auto start
-echo   backend : http://127.0.0.1:8000
-echo   frontend: http://localhost:5173
-echo ==========================================================
+echo ============================================================
+echo   AI Video Assets - LAN Deployment (single port 8000)
+echo ============================================================
 echo.
 
-rem ---------- 1. environment check ----------
-rem Find a REAL python: the WindowsApps\python.exe is only a
-rem Microsoft Store stub which runs no code and has no pip.
+rem ---------- 1. locate a real Python (skip Store stub) ----------
 set "PY="
 call :findpy python
 if not defined PY (
@@ -31,93 +27,73 @@ if not defined PY (
     )
 )
 if not defined PY (
-    echo [ERROR] No usable Python found. Install Python 3.9+ first.
+    echo [ERROR] No usable Python 3.9+ found. Install Python first.
     pause
     exit /b 1
 )
 echo [OK] Python: %PY%
 
-node -v >nul 2>nul
+rem ---------- 2. dependency check / install ----------
+"%PY%" -c "import fastapi, uvicorn, sqlalchemy, jwt, multipart" >nul 2>nul
 if errorlevel 1 (
-    echo [ERROR] Node.js not found in PATH. Install Node 18+ first.
-    pause
-    exit /b 1
-)
-echo [OK] Node.js detected.
-
-rem ---------- 2. kill old processes on 8000 / 5173 ----------
-call :killport 8000
-call :killport 5173
-
-rem ---------- 3. dependencies ----------
-"%PY%" -c "import fastapi, uvicorn, sqlalchemy, jwt" >nul 2>nul
-if errorlevel 1 (
-    echo [SETUP] Installing backend dependencies...
-    "%PY%" -m pip install -r backend\requirements.txt -q
+    echo [SETUP] Installing backend dependencies ...
+    if defined HTTPS_PROXY (
+        "%PY%" -m pip install -r backend\requirements.txt --proxy %HTTPS_PROXY% -q
+    ) else (
+        "%PY%" -m pip install -r backend\requirements.txt -q
+    )
     if errorlevel 1 (
-        echo [ERROR] Backend dependency install failed. Details below:
-        echo ------------------------------------------------------------
-        "%PY%" -m pip install -r backend\requirements.txt
-        echo ------------------------------------------------------------
+        echo [ERROR] Dependency install failed.
         pause
         exit /b 1
     )
 )
-echo [OK] Backend dependencies ready.
+echo [OK] Dependencies ready.
 
-if not exist "frontend\node_modules" (
-    echo [SETUP] Installing frontend dependencies, this may take a while...
-    pushd frontend
-    call npm install
-    popd
+rem ---------- 3. free port 8000 ----------
+call :killport 8000
+
+rem ---------- 4. detect LAN IP ----------
+set "LANIP="
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /c:"IPv4"') do (
+    set "CAND=%%a"
+    set "CAND=!CAND: =!"
+    if not "!CAND!"=="127.0.0.1" if not defined LANIP set "LANIP=!CAND!"
 )
-echo [OK] Frontend dependencies ready.
+if not defined LANIP set "LANIP=127.0.0.1"
 
-rem ---------- 4. start backend ----------
-echo [START] Backend ...
-start "ai-video-backend" /D "%~dp0backend" cmd /k ""%PY%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+echo.
+echo   Local : http://localhost:8000
+echo   LAN   : http://!LANIP!:8000
+echo   Health: http://!LANIP!:8000/api/health
+echo.
+echo   Default login: admin / admin123456  (change after first login)
+echo.
 
-rem ---------- 5. start frontend ----------
-echo [START] Frontend ...
-start "ai-video-frontend" /D "%~dp0frontend" cmd /k npm run dev
+rem ---------- 5. start service ----------
+echo [START] Launching service ...
+start "AI Video Assets Service" /D "%~dp0backend" cmd /k ""%PY%" -m uvicorn serve:app --host 0.0.0.0 --port 8000"
 
-rem ---------- 6. wait until both are reachable ----------
-echo [WAIT] Waiting for backend http://127.0.0.1:8000 ...
+echo [WAIT] Waiting for service ...
 call :waiturl "http://127.0.0.1:8000/api/health" 60
 if errorlevel 1 (
-    echo [ERROR] Backend did not respond in time. Check the backend window.
+    echo [ERROR] Service did not respond. Check the service window.
     pause
     exit /b 1
 )
-echo [OK] Backend is up.
-
-echo [WAIT] Waiting for frontend http://localhost:5173 ...
-call :waiturl "http://localhost:5173" 60
-if errorlevel 1 (
-    echo [ERROR] Frontend did not respond in time. Check the frontend window.
-    pause
-    exit /b 1
-)
-echo [OK] Frontend is up.
-
-rem ---------- 7. open browser ----------
-start "" "http://localhost:5173"
+echo [OK] Service is up.
+start "" "http://localhost:8000"
 echo.
-echo [DONE] Browser opened. Close the two service windows to stop the app.
+echo [DONE] Browser opened. Close the "AI Video Assets Service" window to stop.
 echo.
 ping -n 4 127.0.0.1 >nul
 exit /b 0
 
 
 :findpy
-rem Verify candidate actually executes code and is Python 3.9+
 set "CAND=%~1"
 if not defined CAND exit /b 1
 "%CAND%" -c "import sys; sys.exit(0 if sys.version_info[:2] >= (3,9) else 1)" >nul 2>nul
-if errorlevel 1 exit /b 1
-"%CAND%" -c "print('PYOK')" > "%TEMP%\avm_pycheck.txt" 2>nul
-if errorlevel 1 exit /b 1
-findstr /x "PYOK" "%TEMP%\avm_pycheck.txt" >nul 2>nul
 if errorlevel 1 exit /b 1
 set "PY=%CAND%"
 exit /b 0
@@ -125,15 +101,9 @@ exit /b 0
 
 :killport
 set "PORT=%~1"
-set "FOUND="
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr LISTENING ^| findstr /c:":%PORT%"') do (
-    if not "%%p"=="0" (
-        echo [KILL] Port %PORT% is busy, terminating PID %%p ...
-        taskkill /f /pid %%p >nul 2>nul
-        set "FOUND=1"
-    )
+    if not "%%p"=="0" taskkill /f /pid %%p >nul 2>nul
 )
-if not defined FOUND echo [OK] Port %PORT% is free.
 exit /b 0
 
 

@@ -19,17 +19,19 @@
 """
 import json
 import os
+import queue
 import re
 import shutil
 import ssl
 import socket
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
 UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -302,8 +304,15 @@ def _run_browser_collector(
     headless: bool = True,
     profile_key: str = "",
     dedicated: bool = False,
+    qr_callback: Optional[Callable[[dict], None]] = None,
+    qr_mode: bool = False,
+    proc_holder: Optional[dict] = None,
 ) -> Optional[dict]:
-    """调用 Node Playwright 采集脚本，返回解析后的结果（失败返回 None）。"""
+    """调用 Node Playwright 采集脚本，返回解析后的结果（失败返回 None）。
+
+    qr_callback/qr_mode 用于远程扫码：按行读取 stdout，把 `__QR__` 事件
+    实时回调给调用方（网页端据此显示二维码），最终一行仍是 JSON 结果。
+    """
     if not os.path.exists(_COLLECTOR_SCRIPT):
         raise CollectError(
             "浏览器采集组件缺失：未找到 backend/collector/douyin_collect.mjs",
@@ -322,24 +331,96 @@ def _run_browser_collector(
     env["NODE_PATH"] = _NODE_MODULES
     env["DOYIN_PROFILE_DIR"] = profile
     env["DOYIN_HEADLESS"] = "0" if not headless else "1"
-    try:
-        proc = subprocess.run(
-            ["node", _COLLECTOR_SCRIPT, action],
-            input=json.dumps(payload, ensure_ascii=False),
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env=env,
-            cwd=os.path.dirname(_COLLECTOR_SCRIPT),
-        )
-    except subprocess.TimeoutExpired:
-        raise CollectError("浏览器采集超时，请确认抖音登录态是否有效", channel="browser")
-    except Exception as exc:
-        raise CollectError(f"浏览器采集启动失败：{exc}", channel="browser")
+    env["DOYIN_QR_MODE"] = "1" if qr_mode else "0"
+    cmd = ["node", _COLLECTOR_SCRIPT, action]
+    cwd = os.path.dirname(_COLLECTOR_SCRIPT)
 
-    out = (proc.stdout or "").strip()
+    if qr_callback is None:
+        # 原有调用路径保持不变：一次性收集输出
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=json.dumps(payload, ensure_ascii=False),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                env=env,
+                cwd=cwd,
+            )
+        except subprocess.TimeoutExpired:
+            raise CollectError("浏览器采集超时，请确认抖音登录态是否有效", channel="browser")
+        except Exception as exc:
+            raise CollectError(f"浏览器采集启动失败：{exc}", channel="browser")
+        stdout = proc.stdout or ""
+        stderr = proc.stderr or ""
+    else:
+        # 远程扫码：流式读 stdout，二维码一出现就推送给网页端
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                cwd=cwd,
+            )
+        except Exception as exc:
+            raise CollectError(f"浏览器采集启动失败：{exc}", channel="browser")
+        if proc_holder is not None:
+            proc_holder["proc"] = proc
+        try:
+            proc.stdin.write(json.dumps(payload, ensure_ascii=False))
+            proc.stdin.close()
+        except Exception:
+            pass
+
+        lines = []
+        line_queue = queue.Queue()
+
+        def _reader():
+            try:
+                for raw in proc.stdout:
+                    line_queue.put(raw)
+            finally:
+                line_queue.put(None)
+
+        threading.Thread(target=_reader, daemon=True).start()
+        deadline = time.time() + timeout
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                proc.kill()
+                proc.wait()
+                raise CollectError("浏览器采集超时，请确认抖音登录态是否有效", channel="browser")
+            try:
+                raw = line_queue.get(timeout=min(1.0, remaining))
+            except queue.Empty:
+                continue
+            if raw is None:
+                break
+            line = raw.strip()
+            if not line:
+                continue
+            if line.startswith("__QR__"):
+                try:
+                    qr_callback(json.loads(line[len("__QR__"):]))
+                except Exception:
+                    pass
+                continue
+            lines.append(line)
+        try:
+            proc.wait(timeout=max(1, int(deadline - time.time())))
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait()
+            raise CollectError("浏览器采集超时，请确认抖音登录态是否有效", channel="browser")
+        stdout = "\n".join(lines)
+        stderr = proc.stderr.read() if proc.stderr else ""
+
+    out = stdout.strip()
     if not out:
-        detail = (proc.stderr or "").strip()[-400:]
+        detail = stderr.strip()[-400:]
         raise CollectError(f"浏览器采集无输出：{detail or '未知错误'}", channel="browser")
     try:
         result = json.loads(out.splitlines()[-1])
@@ -534,19 +615,28 @@ def fetch_video(url: str, channel: str = "auto", profile_key: str = "") -> dict:
     )
 
 
-def login_douyin(profile_key: str = "") -> dict:
-    """打开有头浏览器扫码登录；登录态持久化到该账号专属目录。
+def login_douyin(
+    profile_key: str = "",
+    qr_callback: Optional[Callable[[dict], None]] = None,
+    qr_mode: bool = False,
+    proc_holder: Optional[dict] = None,
+) -> dict:
+    """扫码登录并把登录态持久化到该账号专属目录。
 
-    返回当前登录用户信息（尽力而为：昵称 / 抖音号 / sec_uid），
-    供调用方回填发布账号资料并记录登录时间。
+    qr_mode=True 时用无头浏览器运行，并通过 qr_callback 把二维码图片
+    实时回调给网页端，解决局域网用户看不到服务主机浏览器窗口的问题。
+    返回当前登录用户信息（尽力而为：昵称 / 抖音号 / sec_uid）。
     """
     result = _run_browser_collector(
         "login",
         {"url": "https://www.douyin.com/", "profile_key": profile_key},
         timeout=180,
-        headless=False,
+        headless=not qr_mode,
         profile_key=profile_key,
         dedicated=bool(profile_key),
+        qr_callback=qr_callback,
+        qr_mode=qr_mode,
+        proc_holder=proc_holder,
     )
     if not result or not result.get("logged_in"):
         raise CollectError(

@@ -360,6 +360,34 @@
       </div>
     </el-dialog>
 
+    <!-- 远程扫码：服务端无头浏览器抓二维码回传，局域网用户直接扫页面 -->
+    <el-dialog
+      v-model="qrVisible"
+      title="抖音扫码登录"
+      width="430px"
+      class="edit-dialog"
+      :close-on-click-modal="false"
+      destroy-on-close
+      @closed="cancelQrLogin"
+    >
+      <div class="remote-qr-body">
+        <div v-if="qrImage" class="remote-qr-image-wrap">
+          <img :src="qrImage" class="remote-qr-image" alt="抖音登录二维码" />
+          <div v-if="qrKind === 'page'" class="remote-qr-warning">
+            未能自动定位二维码元素，当前显示登录页截图；请按页面提示操作，或改用手动添加
+          </div>
+        </div>
+        <div v-else class="remote-qr-loading">
+          <el-icon class="is-loading"><Connection /></el-icon>
+          <span>{{ qrMessage || '正在打开抖音登录页…' }}</span>
+        </div>
+        <div class="remote-qr-status">{{ qrMessage }}</div>
+        <div class="remote-qr-hint">
+          请用手机抖音 App 扫描上方二维码。登录态保存在服务器上，扫码成功后本窗口会自动关闭。
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 删除确认 -->
     <ConfirmDialog
       v-model="confirmVisible"
@@ -404,6 +432,13 @@ const confirmVisible = ref(false)
 const removing = ref(null)
 const creatorOptions = ref([])
 const loggingId = ref(null)       // 扫码登录中（null 表示空闲）
+const qrVisible = ref(false)
+const qrSession = ref('')
+const qrImage = ref('')
+const qrSeq = ref(0)
+const qrKind = ref('qr')
+const qrMessage = ref('')
+const qrTimer = ref(null)
 const updatingId = ref(null)      // 行内更新中
 const snapshotVisible = ref(false)
 const snapshotLoading = ref(false)
@@ -648,23 +683,89 @@ async function doVideoCreate() {
   }
 }
 
-// 抖音扫码登录：后端按登录用户自动建号或回填已有账号
-async function loginNewAccount() {
-  loggingId.value = -1
-  ElMessage.info('正在打开抖音登录窗口，请扫码并等待页面自动完成')
+// 远程扫码：后端无头浏览器抓二维码，前端弹窗展示并轮询结果
+function clearQrTimer() {
+  if (qrTimer.value) {
+    clearInterval(qrTimer.value)
+    qrTimer.value = null
+  }
+}
+
+async function cancelQrLogin() {
+  clearQrTimer()
+  const session = qrSession.value
+  qrSession.value = ''
+  qrImage.value = ''
+  if (session) {
+    try { await api.post('/douyin/login/cancel', { session }) } catch (_) { /* 忽略 */ }
+  }
+}
+
+async function startRemoteLogin(accountId) {
+  clearQrTimer()
+  qrImage.value = ''
+  qrSeq.value = 0
+  qrKind.value = 'qr'
+  qrMessage.value = '正在打开抖音登录页（首次加载约需半分钟），请稍候…'
+  qrVisible.value = true
   try {
-    const { data } = await api.post('/douyin/login', {}, { timeout: 200000 })
-    if (!data.ok) {
-      ElMessage.warning({
-        message: [data.message || '未检测到登录态，请重试', data.manual_hint].filter(Boolean).join('｜'),
-        duration: 8000,
-      })
+    const { data } = await api.post('/douyin/login/start', accountId ? { account_id: accountId } : {})
+    if (!data.ok) throw new Error(data.message || '启动扫码失败')
+    qrSession.value = data.session
+  } catch (e) {
+    qrVisible.value = false
+    ElMessage.error(e.response?.data?.detail || e.message || '启动扫码失败')
+    return
+  }
+  qrTimer.value = setInterval(pollRemoteLogin, 1200)
+  pollRemoteLogin()
+}
+
+async function pollRemoteLogin() {
+  const session = qrSession.value
+  if (!session || !qrVisible.value) {
+    clearQrTimer()
+    return
+  }
+  try {
+    const { data } = await api.get('/douyin/login/status', { params: { session, qr_seq: qrSeq.value } })
+    if (data.qr) {
+      qrImage.value = data.qr
+      qrSeq.value = Number(data.qr_seq || 0)
+    }
+    qrKind.value = data.kind || 'qr'
+    qrMessage.value = data.message || ''
+    if (data.status === 'success') {
+      clearQrTimer()
+      qrVisible.value = false
+      const result = data.result || {}
+      ElMessage.success(result.created ? '扫码成功，已新建账号' : `扫码成功，已更新账号「${result.account_name || ''}」`)
+      qrSession.value = ''
+      await load()
       return
     }
-    ElMessage.success(data.created ? '扫码成功，已新建账号' : `扫码成功，已更新账号「${data.account_name || ''}」`)
-    await load()
+    if (data.status === 'failed') {
+      clearQrTimer()
+      qrVisible.value = false
+      ElMessage.warning({
+        message: [data.message || '扫码失败', data.manual_hint].filter(Boolean).join('｜'),
+        duration: 8000,
+      })
+      qrSession.value = ''
+    }
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '打开登录窗口失败')
+    clearQrTimer()
+    qrVisible.value = false
+    ElMessage.error(e.response?.data?.detail || '扫码状态查询失败')
+  }
+}
+
+// 抖音扫码登录：后端按登录用户自动建号或回填已有账号
+async function loginNewAccount() {
+  if (loggingId.value !== null) return
+  loggingId.value = -1
+  try {
+    await startRemoteLogin()
   } finally {
     loggingId.value = null
   }
@@ -674,20 +775,8 @@ async function loginNewAccount() {
 async function loginAccount(row) {
   if (loggingId.value !== null) return
   loggingId.value = row.id
-  ElMessage.info(`正在打开「${row.name}」的抖音登录窗口，请扫码`)
   try {
-    const { data } = await api.post('/douyin/login', { account_id: row.id }, { timeout: 200000 })
-    if (!data.ok) {
-      ElMessage.warning({
-        message: [data.message || '未检测到登录态，请重试', data.manual_hint].filter(Boolean).join('｜'),
-        duration: 8000,
-      })
-    } else {
-      ElMessage.success('登录态已保存')
-    }
-    await load()
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '打开登录窗口失败')
+    await startRemoteLogin(row.id)
   } finally {
     loggingId.value = null
   }
@@ -835,7 +924,10 @@ onMounted(async () => {
   load()
   document.addEventListener('click', onDocClick)
 })
-onUnmounted(() => document.removeEventListener('click', onDocClick))
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  clearQrTimer()
+})
 </script>
 
 <style scoped>
@@ -919,6 +1011,52 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
   font-size: 12.5px;
   min-height: 44px !important;
   box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+.remote-qr-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+.remote-qr-image-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.remote-qr-image {
+  width: 240px;
+  height: 240px;
+  object-fit: contain;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: #fff;
+}
+.remote-qr-warning {
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-color-warning);
+  text-align: center;
+}
+.remote-qr-loading {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--adm-text-secondary);
+  font-size: 13px;
+}
+.remote-qr-status { font-size: 13px; color: var(--adm-text-main, #334155); }
+.remote-qr-hint {
+  max-width: 340px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--adm-text-secondary);
+  text-align: center;
 }
 </style>
 
