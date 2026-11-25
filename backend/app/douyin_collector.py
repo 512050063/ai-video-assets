@@ -58,6 +58,43 @@ _NODE_MODULES = os.environ.get("AVM_NODE_MODULES", "").strip() or os.path.join(
     os.path.dirname(_BASE_DIR), "frontend", "node_modules")
 
 
+def _node_bin() -> str:
+    """解析 node 可执行文件绝对路径。
+
+    计划任务 / 系统服务启动的进程只继承系统 PATH，不含 WorkBuddy 会话注入的
+    Node 目录，直接调用 "node" 会抛 WinError 2（系统找不到指定的文件）。
+    按优先级探测：环境变量 AVM_NODE_BIN → PATH → 已知 WorkBuddy / 系统安装位置。
+    """
+    override = os.environ.get("AVM_NODE_BIN", "").strip()
+    if override and os.path.isfile(override):
+        return override
+    from_path = shutil.which("node")
+    if from_path:
+        return from_path
+    home = os.path.expanduser("~")
+    candidates = [
+        os.path.join(home, ".workbuddy", "binaries", "node", "versions", "22.22.2-6", "node.exe"),
+        os.path.join(home, ".workbuddy", "binaries", "node", "versions", "22.22.2", "node.exe"),
+        r"C:\Program Files\nodejs\node.exe",
+        r"C:\Program Files (x86)\nodejs\node.exe",
+    ]
+    # 兜底：扫描 WorkBuddy 的 versions 目录，取任意一个可用 node.exe
+    versions_root = os.path.join(home, ".workbuddy", "binaries", "node", "versions")
+    if os.path.isdir(versions_root):
+        for name in sorted(os.listdir(versions_root), reverse=True):
+            exe = os.path.join(versions_root, name, "node.exe")
+            if os.path.isfile(exe):
+                candidates.append(exe)
+    for exe in candidates:
+        if os.path.isfile(exe):
+            return exe
+    raise CollectError(
+        "未找到 Node.js 可执行文件，浏览器采集无法启动",
+        channel="browser",
+        manual_hint="请确认 Node.js 已安装，或设置环境变量 AVM_NODE_BIN 指向 node.exe 的完整路径",
+    )
+
+
 def _profile_dir(profile_key: str = "", dedicated: bool = False) -> str:
     """把账号标识映射为安全的本地目录；没有独立目录时复用公共登录态。
 
@@ -332,7 +369,7 @@ def _run_browser_collector(
     env["DOYIN_PROFILE_DIR"] = profile
     env["DOYIN_HEADLESS"] = "0" if not headless else "1"
     env["DOYIN_QR_MODE"] = "1" if qr_mode else "0"
-    cmd = ["node", _COLLECTOR_SCRIPT, action]
+    cmd = [_node_bin(), _COLLECTOR_SCRIPT, action]
     cwd = os.path.dirname(_COLLECTOR_SCRIPT)
 
     if qr_callback is None:
