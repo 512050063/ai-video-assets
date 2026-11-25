@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user, is_admin
+from ..auth import get_current_user, require_permission
 from ..auto_update_service import _LAST_RUN_KEY, run_auto_update
 from ..database import get_db
 from ..models import PublishAccount, PublishAccountSnapshot, SystemSetting, User
@@ -17,10 +17,8 @@ def run_now(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """手动执行一次自动更新（仅超管）；离线账号仍会被跳过。"""
-    if not is_admin(user):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=403, detail="仅超级管理员可执行自动更新")
+    """手动执行一次自动更新（需 settings.manage 权限）；离线账号仍会被跳过。"""
+    require_permission(user, "settings.manage", db)
     result = run_auto_update(db, account_ids=data.account_ids, force=data.force)
     return AutoUpdateRunOut.model_validate(result)
 

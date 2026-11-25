@@ -8,7 +8,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user, is_admin
+from ..auth import get_current_user, require_permission
 from ..database import get_db
 from ..models import SystemSetting, User
 from ..permissions import (
@@ -26,9 +26,9 @@ from ..schemas import RoleAssignIn, RolePermissionUpdateIn, RolePermissionOut
 router = APIRouter(prefix="/roles", tags=["roles"])
 
 
-def require_admin(user: User) -> None:
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可管理角色权限")
+def require_admin(user: User, db: Session = None) -> None:
+    """角色权限管理准入：具备 roles.manage 按钮权限即可。"""
+    require_permission(user, "roles.manage", db)
 
 
 @router.get("", response_model=list[RolePermissionOut])
@@ -83,7 +83,7 @@ def update_role(
 
     「超管」角色的菜单与按钮恒为全量，不可被裁剪，避免把系统锁死。
     """
-    require_admin(user)
+    require_admin(user, db)
     if role_key not in ROLE_KEYS:
         raise HTTPException(status_code=404, detail="角色不存在")
 
@@ -131,7 +131,7 @@ def assign_user_role(
     user: User = Depends(get_current_user),
 ):
     """调整用户的模块角色（仅超管）。"""
-    require_admin(user)
+    require_admin(user, db)
     if data.module_role not in ROLE_KEYS:
         raise HTTPException(status_code=400, detail=f"角色必须是 {'/'.join(ROLE_KEYS)} 之一")
     target = db.query(User).get(user_id)

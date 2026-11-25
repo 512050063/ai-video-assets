@@ -10,7 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user, is_admin
+from ..auth import get_current_user, require_permission
 from ..auto_update_service import (
     create_account_snapshot,
     get_auto_update_config,
@@ -732,9 +732,8 @@ def save_douyin_config(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """保存官方开放平台凭据（仅超管）。"""
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可配置抖音采集通道")
+    """保存官方开放平台凭据（需 settings.manage 权限）。"""
+    require_permission(user, "settings.manage", db)
     from ..models import SystemSetting
 
     allowed = ("app_id", "app_secret", "access_token", "open_id")

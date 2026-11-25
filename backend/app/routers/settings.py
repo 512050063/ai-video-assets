@@ -6,7 +6,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user, is_admin
+from ..auth import get_current_user, require_permission
 from ..database import get_db
 from ..models import Production, SystemSetting, User
 from ..schemas import SettingOut, SettingUpdateIn
@@ -210,8 +210,7 @@ def delete_option(
 
     已被业务记录引用的选项直接拒绝删除，避免留下悬空的平台名。
     """
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可修改系统配置")
+    require_permission(user, "settings.manage", db)
     if key not in ("platforms", "publish_platforms"):
         raise HTTPException(status_code=400, detail="该配置项不支持删除选项")
     target = (name or "").strip()
@@ -254,8 +253,7 @@ def update_setting(
     user: User = Depends(get_current_user),
 ):
     """更新单个配置项（仅超管）。"""
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可修改系统配置")
+    require_permission(user, "settings.manage", db)
     if not data.key:
         raise HTTPException(status_code=400, detail="配置键不能为空")
     if data.key not in DEFAULT_SETTINGS:
@@ -283,8 +281,7 @@ def update_setting(
 @router.post("/reset")
 def reset_settings(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """恢复默认配置（仅超管）。"""
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可修改系统配置")
+    require_permission(user, "settings.manage", db)
     db.query(SystemSetting).delete()
     db.commit()
     _ensure_defaults(db)

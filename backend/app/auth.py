@@ -97,9 +97,20 @@ def require_create(user: User) -> None:
         raise HTTPException(status_code=403, detail="当前账号为只读权限，无法创建内容")
 
 
-def ensure_owner(resource, user: User, action: str = "操作"):
-    """资源的创建者或超管（admin）可以修改/删除。"""
+def is_privileged(user: User) -> bool:
+    """是否超管级别：真超管（role=admin）或模块角色 super。
+
+    模块角色 super 是角色权限页可配置的最高档，拥有它等同于超管，
+    因此数据所有权、日志范围等原本只看 is_admin 的地方也应对其放行。
+    """
     if is_admin(user):
+        return True
+    return user_module_role(user) == "super"
+
+
+def ensure_owner(resource, user: User, action: str = "操作"):
+    """资源的创建者或超管级别账号可以修改/删除。"""
+    if is_privileged(user):
         return
     if resource.owner_id is None:
         return

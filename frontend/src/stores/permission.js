@@ -35,11 +35,10 @@ export const usePermissionStore = defineStore('permission', {
   actions: {
     async load(force = false) {
       if (this.loaded && !force) return
-      // 未登录时不请求权限接口（否则会触发 401 跳登录页）
-      if (!readToken()) {
-        this.loaded = true
-        return
-      }
+      // 未登录时不请求权限接口（否则会触发 401 跳登录页）。
+      // 注意：此处不能把 loaded 置为 true——登录跳转时 MainLayout 首挂载可能早于 token 落盘，
+      // 若提前锁定 loaded，后续调用会被短路，菜单将一直为空。保持 false 以便 token 就位后重拉。
+      if (!readToken()) return
       try {
         const { data } = await api.get('/roles/mine')
         this.role = data.role || 'production'
@@ -48,8 +47,7 @@ export const usePermissionStore = defineStore('permission', {
         this.buttons = Array.isArray(data.buttons) ? data.buttons : []
         this.loaded = true
       } catch (e) {
-        /* 权限读取失败时保持空权限，由后端做最终校验 */
-        this.loaded = true
+        /* 权限读取失败时不锁定 loaded，允许 token 就位后重试；页面按钮仍由后端最终校验 */
       }
     },
     async loadRoles(force = false) {

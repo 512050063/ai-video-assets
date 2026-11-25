@@ -5,7 +5,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user, hash_password, is_admin
+from ..auth import get_current_user, hash_password, require_permission
 from ..database import get_db
 from ..models import Character, Production, User
 from ..permissions import (
@@ -27,9 +27,9 @@ router = APIRouter(prefix="/users", tags=["users"])
 VALID_ROLES = {"admin", "creator", "viewer"}
 
 
-def require_admin(user: User) -> None:
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可管理用户")
+def require_admin(user: User, db: Session = None) -> None:
+    """用户管理准入：具备 users.manage 按钮权限即可（超管 / super 角色恒有）。"""
+    require_permission(user, "users.manage", db)
 
 
 def _to_item(user: User, db: Session) -> UserListItem:
@@ -41,14 +41,14 @@ def _to_item(user: User, db: Session) -> UserListItem:
 
 @router.get("", response_model=list)
 def list_users(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    require_admin(user)
+    require_admin(user, db)
     users = db.query(User).order_by(User.id.asc()).all()
     return [_to_item(u, db) for u in users]
 
 
 @router.post("", response_model=UserOut)
 def create_user(data: UserCreateIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    require_admin(user)
+    require_admin(user, db)
     username = (data.username or "").strip()
     password = data.password or ""
     if len(username) < 3:
@@ -94,7 +94,7 @@ def update_user(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_admin(user, db)
     target = db.query(User).get(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -163,7 +163,7 @@ def reset_password(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    require_admin(user)
+    require_admin(user, db)
     target = db.query(User).get(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")
@@ -178,7 +178,7 @@ def reset_password(
 
 @router.delete("/{user_id}")
 def delete_user(user_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    require_admin(user)
+    require_admin(user, db)
     target = db.query(User).get(user_id)
     if not target:
         raise HTTPException(status_code=404, detail="用户不存在")

@@ -278,8 +278,9 @@ const passwordVisible = ref(false)
 const profileForm = reactive({ nickname: '', phone: '', email: '', avatar: '' })
 const passwordForm = reactive({ old_password: '', new_password: '', confirm: '' })
 
-// 菜单分组：概览 → 创作流程（五步）→ 资产库 → 我的（我的账号）→ 系统（仅管理员）
-// 各菜单按模块角色权限过滤（见 stores/permission.js）
+// 菜单分组：概览 → 创作流程（五步）→ 资产库 → 我的（我的账号）→ 系统
+// 所有菜单统一按模块角色权限过滤（见 stores/permission.js）；系统组不再限定 admin 身份，
+// 角色权限里勾选了 users / roles / settings 菜单的非超管也能看到并进入。
 const menuGroups = computed(() => {
   const groups = [
     {
@@ -307,16 +308,14 @@ const menuGroups = computed(() => {
       items: [{ path: '/publish-accounts', label: '我的账号', icon: Connection, key: 'publish-accounts' }]
     }
   ]
-  if (auth.isAdmin) {
-    groups.push({
-      title: '系统',
-      items: [
-        { path: '/users', label: '用户管理', icon: Avatar, key: 'users' },
-        { path: '/roles', label: '角色权限', icon: Lock, key: 'roles' },
-        { path: '/settings', label: '配置中心', icon: Setting, key: 'settings' }
-      ]
-    })
-  }
+  groups.push({
+    title: '系统',
+    items: [
+      { path: '/users', label: '用户管理', icon: Avatar, key: 'users' },
+      { path: '/roles', label: '角色权限', icon: Lock, key: 'roles' },
+      { path: '/settings', label: '配置中心', icon: Setting, key: 'settings' }
+    ]
+  })
   // 按模块角色过滤菜单；过滤后为空分组的整组隐藏
   return groups
     .map((g) => ({ ...g, items: g.items.filter((m) => perm.canMenu(m.key)) }))

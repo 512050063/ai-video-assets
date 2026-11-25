@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { readToken, readUser } from '../utils/session'
+import { readToken } from '../utils/session'
 import { usePermissionStore } from '../stores/permission'
 
 // 路由 name → 后端权限矩阵的菜单 key。
@@ -88,19 +88,19 @@ const routes = [
         path: 'users',
         name: 'UserManagement',
         component: () => import('../views/UserManagement.vue'),
-        meta: { title: '用户管理', group: '系统', adminOnly: true }
+        meta: { title: '用户管理', group: '系统' }
       },
       {
         path: 'settings',
         name: 'SystemSettings',
         component: () => import('../views/SystemSettings.vue'),
-        meta: { title: '配置中心', group: '系统', adminOnly: true }
+        meta: { title: '配置中心', group: '系统' }
       },
       {
         path: 'roles',
         name: 'roles',
         component: () => import('../views/RolePermissions.vue'),
-        meta: { title: '角色权限', group: '系统', adminOnly: true }
+        meta: { title: '角色权限', group: '系统' }
       }
     ]
   },
@@ -117,11 +117,8 @@ router.beforeEach(async (to) => {
   }
   if (!token) return { path: '/login', query: { redirect: to.fullPath } }
 
-  // 管理员专属页面：非超管回落到首页（用户管理 / 配置中心 / 角色权限）
-  if (to.meta.adminOnly) {
-    const user = readUser()
-    if (!user || user.role !== 'admin') return '/dashboard'
-  }
+  // 系统页面（用户管理 / 配置中心 / 角色权限）不再按 admin 身份硬拦截，
+  // 与其余页面一样由模块角色菜单权限（users / settings / roles）统一控制。
 
   // 模块角色菜单权限：先拉取当前用户权限，再按映射后的菜单 key 校验。
   // 注意：dashboard 是所有角色的落地页，永不自我重定向，否则登录后会无限跳转。

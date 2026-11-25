@@ -1191,6 +1191,7 @@ def run():
     ok("新建指定模块角色的用户", code == 200 and ru.get("module_role") == "inspiration",
        ru.get("module_role") if isinstance(ru, dict) else ru)
     ru_id = ru.get("id") if isinstance(ru, dict) else None
+    rtoken = None
     if ru_id:
         CREATED["users"].append(ru_id)
         code, rlogin = req("POST", "/auth/login", {"username": role_uname, "password": "test123456"})
@@ -1213,6 +1214,51 @@ def run():
         code, rperm2 = req("GET", "/roles/mine", token=rtoken)
         ok("调整后模块角色立即生效", code == 200 and rperm2.get("role") == "operation",
            rperm2.get("role") if isinstance(rperm2, dict) else rperm2)
+
+    section("18b. 角色授权等同超管：全量菜单/按钮的系统功能可访问")
+    # 用超管把 inspiration 角色临时配为全量，验证非 admin 用户凭角色权限即可用系统功能
+    full_menus = list(super_role.get("menus") or [])
+    full_buttons = list(super_role.get("buttons") or [])
+    code, grant = req("PUT", "/roles/inspiration", {"menus": full_menus, "buttons": full_buttons})
+    ok("超管可把角色授权为全量菜单与按钮", code == 200
+       and set((grant.get("menus") or [])) == set(full_menus)
+       and set((grant.get("buttons") or [])) == set(full_buttons),
+       "code=%s menus=%s" % (code, len(grant.get("menus") or [])))
+    try:
+        if rtoken and ru_id:
+            # 上一段把该用户改成了 operation，这里改回被授权为全量的 inspiration
+            req("PUT", "/roles/users/%s" % ru_id, {"module_role": "inspiration"})
+            code, fullperm = req("GET", "/roles/mine", token=rtoken)
+            ok("全量授权角色获得系统菜单", code == 200
+               and all(k in fullperm.get("menus", []) for k in ("users", "roles", "settings")),
+               fullperm.get("menus") if isinstance(fullperm, dict) else fullperm)
+            ok("全量授权角色获得三个管理按钮", all(
+                k in fullperm.get("buttons", []) for k in
+                ("users.manage", "roles.manage", "settings.manage")),
+               [k for k in ("users.manage", "roles.manage", "settings.manage")
+                if k in fullperm.get("buttons", [])])
+            code, users_resp = req("GET", "/users", token=rtoken)
+            ok("非超管凭 users.manage 可访问用户管理", code == 200
+               and isinstance(users_resp, list), "code=%s" % code)
+            code, set_resp = req("GET", "/settings/site", token=rtoken)
+            ok("非超管可读取系统配置", code == 200, "code=%s" % code)
+            code, set_upd = req("PUT", "/settings", {"key": "site", "value": {
+                "name": PREFIX + "越权测试", "subtitle": "Assets Console", "logo": "", "footer": "test"}},
+                token=rtoken)
+            ok("非超管凭 settings.manage 可修改系统配置", code == 200, "code=%s" % code)
+            code, roles_resp = req("GET", "/roles", token=rtoken)
+            ok("非超管可读取角色权限列表", code == 200 and isinstance(roles_resp, list), "code=%s" % code)
+            code, role_upd2 = req("PUT", "/roles/inspiration", {
+                "menus": list(insp_role.get("menus") or []),
+                "buttons": list(insp_role.get("buttons") or [])}, token=rtoken)
+            ok("非超管凭 roles.manage 可修改角色权限", code == 200, "code=%s" % code)
+    finally:
+        # 还原灵感角色的内置权限，避免污染后续测试与交付基线
+        req("PUT", "/roles/inspiration", {
+            "menus": list(insp_role.get("menus") or []),
+            "buttons": list(insp_role.get("buttons") or [])})
+        req("PUT", "/settings", {"key": "site", "value": {
+            "name": "视频资产管理", "subtitle": "Assets Console", "logo": "", "footer": "v1.3 · 本地部署"}})
 
     section("19. 配置中心：平台图片图标与模块统一展示方式")
     code, plat_set = req("GET", "/settings/platforms")

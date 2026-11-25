@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user, is_admin
+from ..auth import get_current_user, require_permission
 from ..database import get_db
 from ..models import Tag, User
 from ..schemas import TagIn, TagOptionOut, TagOut
@@ -94,8 +94,7 @@ def update_tag(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可修改标签库")
+    require_permission(user, "settings.manage", db)
     tag = db.query(Tag).get(tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="标签不存在")
@@ -118,8 +117,7 @@ def delete_tag(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可删除标签")
+    require_permission(user, "settings.manage", db)
     tag = db.query(Tag).get(tag_id)
     if not tag:
         raise HTTPException(status_code=404, detail="标签不存在")

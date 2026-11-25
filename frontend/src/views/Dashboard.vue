@@ -222,9 +222,11 @@ import PageHeader from '../components/PageHeader.vue'
 import TrendChart from '../components/ui/TrendChart.vue'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
+import { usePermissionStore } from '../stores/permission'
 import { useSettingsStore } from '../stores/settings'
 
 const auth = useAuthStore()
+const perm = usePermissionStore()
 const settings = useSettingsStore()
 const router = useRouter()
 
@@ -365,8 +367,8 @@ async function searchCities(query) {
 }
 
 async function persistCity(place) {
-  if (!auth.isAdmin) {
-    ElMessage.info('已切换当前天气城市；仅管理员可保存为默认')
+  if (!perm.can('settings.manage')) {
+    ElMessage.info('已切换当前天气城市；无「修改配置」权限，仅当前会话生效')
     return
   }
   try {

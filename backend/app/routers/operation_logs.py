@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from ..auth import get_current_user, is_admin
+from ..auth import get_current_user, is_privileged, require_permission
 from ..database import get_db
 from ..models import OperationLog, User
 
@@ -39,7 +39,7 @@ def list_logs(
 ):
     """超管看全部；其他成员只见自己的操作记录。返回分页结构。"""
     q = db.query(OperationLog)
-    if not is_admin(user):
+    if not is_privileged(user):
         q = q.filter(or_(OperationLog.user_id == user.id, OperationLog.username == user.display_name))
     if module:
         q = q.filter(OperationLog.module == module)
@@ -72,7 +72,7 @@ def list_modules(
 ):
     """已产生日志的模块清单，用于前端筛选下拉。"""
     q = db.query(OperationLog.module).distinct()
-    if not is_admin(user):
+    if not is_privileged(user):
         q = q.filter(or_(OperationLog.user_id == user.id, OperationLog.username == user.display_name))
     return sorted({(r[0] or "其他") for r in q.all()})
 
@@ -82,9 +82,8 @@ def clear_logs(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """清空操作日志（仅超管）。"""
-    if not is_admin(user):
-        raise HTTPException(status_code=403, detail="仅超级管理员可清空操作日志")
+    """清空操作日志（需 users.manage 权限）。"""
+    require_permission(user, "users.manage", db)
     count = db.query(OperationLog).delete()
     db.commit()
     return {"ok": True, "deleted": count}
