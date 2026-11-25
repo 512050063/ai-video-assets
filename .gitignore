@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Node
+frontend/node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# SQLite 运行时文件（主库需随包提供，WAL/SHM 不提交）
+*.db-shm
+*.db-wal
+*.db-journal
+
+# 开发期备份、日志、临时产物
+*.bak
+*.bak-*
+*.log
+*.tmp
+backend/data/douyin_profile/
+backend/data/douyin_profiles/
+tok.txt
+
+# 项目内部工作日志（不进公开仓库）
+.workbuddy/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+.env
+.env.*

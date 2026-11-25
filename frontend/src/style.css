@@ -1,0 +1,1380 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   Element Plus Admin Design System
+   tokens: design-tokens.json (element-plus-admin skill)
+   ============================================================ */
+:root {
+  /* 主色 */
+  --el-color-primary: #409eff;
+  --el-color-primary-light-3: #79bbff;
+  --el-color-primary-light-5: #a0cfff;
+  --el-color-primary-light-7: #c6e2ff;
+  --el-color-primary-light-8: #d9ecff;
+  --el-color-primary-light-9: #ecf5ff;
+  --el-color-primary-dark-2: #337ecc;
+
+  /* 状态色 */
+  --el-color-success: #67c23a;
+  --el-color-warning: #e6a23c;
+  --el-color-danger: #f56c6c;
+  --el-color-error: #f56c6c;
+  --el-color-info: #909399;
+
+  /* 文字 */
+  --el-text-color-primary: #303133;
+  --el-text-color-regular: #606266;
+  --el-text-color-secondary: #909399;
+  --el-text-color-placeholder: #c0c4cc;
+
+  /* 边框 */
+  --el-border-color: #dcdfe6;
+  --el-border-color-light: #e4e7ed;
+  --el-border-color-lighter: #ebeef5;
+  --el-border-color-extra-light: #f2f6fc;
+  --el-border-color-hover: #c0c4cc;
+
+  /* 背景 */
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #f0f2f5;
+  --el-bg-color-overlay: #ffffff;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-light: #f5f7fa;
+  --el-fill-color-lighter: #fafafa;
+
+  /* 圆角 */
+  --el-border-radius-base: 4px;
+  --el-border-radius-small: 4px;
+  --el-border-radius-round: 4px;
+  --el-border-radius-circle: 50%;
+
+  /* 字号 */
+  --el-font-size-base: 14px;
+  --el-font-size-small: 13px;
+  --el-font-size-extra-small: 12px;
+
+  /* 阴影 */
+  --el-box-shadow-light: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --el-box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  --el-box-shadow-dark: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+  /* 应用级 token */
+  /* 背景：柔和三色渐变（参考站设计语言），侧边栏/卡片用玻璃层浮于其上 */
+  --adm-bg: #eef4fb;
+  --adm-bg-gradient: linear-gradient(135deg, #d7e9ff 0%, #e5efff 46%, #dbf4fb 100%);
+  --adm-surface: rgba(255, 255, 255, 0.72);
+  --adm-surface-solid: rgba(255, 255, 255, 0.92);
+  --adm-surface-hover: rgba(255, 255, 255, 0.9);
+  --adm-sidebar-width: 240px;
+  --adm-sidebar-width-collapsed: 68px;
+  --adm-header-height: 66px;
+  --adm-radius-sm: 12px;
+  --adm-radius-md: 20px;
+  --adm-radius-lg: 24px;
+  --adm-shadow-low: 0 2px 8px rgba(123, 163, 209, 0.12);
+  --adm-shadow-medium: 0 8px 32px rgba(123, 163, 209, 0.18);
+  --adm-shadow-high: 0 12px 40px rgba(123, 163, 209, 0.24);
+  /* 文字层级：比 EP 默认更柔和的蓝灰 */
+  --adm-text-primary: #3d5266;
+  --adm-text-regular: #5a7086;
+  --adm-text-secondary: #8fa3b8;
+  --adm-text-placeholder: #b8c8d8;
+  --adm-text-tertiary: #a9b9cc;
+  /* 动效 token：全站统一节奏，避免各页时长/曲线各自为政 */
+  --adm-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --adm-ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --adm-dur-xs: 0.16s;
+  --adm-dur-sm: 0.24s;
+  --adm-dur-md: 0.36s;
+  --adm-dur-lg: 0.56s;
+  --adm-border: rgba(255, 255, 255, 0.78);
+  --adm-border-dark: rgba(123, 163, 209, 0.18);
+  --adm-border-deep: rgba(123, 163, 209, 0.28);
+  /* 马卡龙强调色：用于图标底座、状态标识 */
+  --adm-coral: #ff7b6b;
+  --adm-coral-bg: #ffe8e5;
+  --adm-blue: #7ba3d1;
+  --adm-blue-bg: #e8f0f8;
+  --adm-mint: #7bc8a0;
+  --adm-mint-bg: #e4f6ee;
+  --adm-amber: #ffc97c;
+  --adm-amber-bg: #fff3df;
+  --adm-lilac: #b6a6e8;
+  --adm-lilac-bg: #f0ebfb;
+  /* 选中态：折叠窄栏里图标+文字整体高亮 */
+  --adm-active-bg: rgba(64, 158, 255, 0.12);
+  --adm-active-bg-strong: rgba(64, 158, 255, 0.18);
+  --adm-hover-bg: rgba(255, 255, 255, 0.72);
+  --adm-input-bg: rgba(255, 255, 255, 0.78);
+  /* 面板底色（状态盒 / 卡片内嵌块等） */
+  --adm-panel: rgba(255, 255, 255, 0.55);
+  --adm-panel-soft: rgba(255, 255, 255, 0.5);
+  --adm-panel-strong: rgba(255, 255, 255, 0.7);
+  --adm-panel-hover: rgba(255, 255, 255, 0.85);
+  /* 内嵌凹面 / 柔色底 / 次级文字：多个页面引用，集中定义避免变量落空 */
+  --adm-surface-sunken: rgba(255, 255, 255, 0.42);
+  --adm-mint-soft: rgba(123, 200, 160, 0.14);
+  --adm-text-muted: #9aabc0;
+  /* 表格分隔线：比默认边框更轻，避免直角硬边感 */
+  --adm-table-line: rgba(123, 163, 209, 0.14);
+  /* 状态色底（流程状态格 / 提示条） */
+  --adm-state-warning-bg: rgba(253, 246, 236, 0.72);
+  --adm-state-primary-bg: rgba(240, 247, 255, 0.72);
+  --adm-state-success-bg: rgba(240, 249, 235, 0.72);
+  --adm-state-warning-fg: #b88230;
+}
+
+/* ============================================================
+   深色主题
+   ============================================================ */
+html.dark {
+  --adm-bg: #0f1624;
+  --adm-bg-gradient: linear-gradient(135deg, #101d31 0%, #15263c 46%, #142e3a 100%);
+  --adm-surface: rgba(28, 36, 50, 0.72);
+  --adm-surface-solid: rgba(26, 33, 46, 0.96);
+  --adm-surface-hover: rgba(40, 51, 68, 0.82);
+
+  --adm-text-primary: #e4ebf5;
+  --adm-text-regular: #b3c0d1;
+  --adm-text-secondary: #8493a6;
+  --adm-text-placeholder: #5f6d80;
+  --adm-text-tertiary: #6f8095;
+
+  --adm-border: rgba(255, 255, 255, 0.09);
+  --adm-border-dark: rgba(255, 255, 255, 0.14);
+  --adm-border-deep: rgba(255, 255, 255, 0.22);
+
+  --adm-shadow-low: 0 2px 8px rgba(0, 0, 0, 0.32);
+  --adm-shadow-medium: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --adm-shadow-high: 0 12px 40px rgba(0, 0, 0, 0.5);
+
+  --adm-coral: #ff8f80;
+  --adm-coral-bg: rgba(255, 123, 107, 0.16);
+  --adm-blue: #8fb6e0;
+  --adm-blue-bg: rgba(123, 163, 209, 0.16);
+  --adm-mint: #7fd3a9;
+  --adm-mint-bg: rgba(123, 200, 160, 0.16);
+  --adm-amber: #f0b96b;
+  --adm-amber-bg: rgba(255, 201, 124, 0.16);
+  --adm-lilac: #c0b1f0;
+  --adm-lilac-bg: rgba(182, 166, 232, 0.16);
+
+  --adm-active-bg: rgba(64, 158, 255, 0.2);
+  --adm-active-bg-strong: rgba(64, 158, 255, 0.28);
+  --adm-hover-bg: rgba(255, 255, 255, 0.08);
+  --adm-input-bg: rgba(255, 255, 255, 0.07);
+  --adm-panel: rgba(255, 255, 255, 0.055);
+  --adm-panel-soft: rgba(255, 255, 255, 0.04);
+  --adm-panel-strong: rgba(255, 255, 255, 0.1);
+  --adm-panel-hover: rgba(255, 255, 255, 0.14);
+  --adm-surface-sunken: rgba(255, 255, 255, 0.05);
+  --adm-mint-soft: rgba(123, 200, 160, 0.16);
+  --adm-text-muted: #7c8c9f;
+  --adm-table-line: rgba(255, 255, 255, 0.08);
+  --adm-state-warning-bg: rgba(230, 162, 60, 0.16);
+  --adm-state-primary-bg: rgba(64, 158, 255, 0.16);
+  --adm-state-success-bg: rgba(103, 194, 58, 0.16);
+  --adm-state-warning-fg: #f0b96b;
+
+  /* Element Plus 深色下的补充修正 */
+  --el-bg-color: #1c2432;
+  --el-bg-color-page: #141b26;
+  --el-bg-color-overlay: #1c2432;
+  --el-fill-color-blank: #1c2432;
+  --el-fill-color-light: #232d3d;
+  --el-fill-color-lighter: #26313f;
+  --el-text-color-primary: #e4ebf5;
+  --el-text-color-regular: #b3c0d1;
+  --el-text-color-secondary: #8493a6;
+  --el-text-color-placeholder: #5f6d80;
+  --el-border-color: rgba(255, 255, 255, 0.16);
+  --el-border-color-light: rgba(255, 255, 255, 0.12);
+  --el-border-color-lighter: rgba(255, 255, 255, 0.09);
+  --el-border-color-extra-light: rgba(255, 255, 255, 0.06);
+  --el-border-color-hover: rgba(255, 255, 255, 0.26);
+  --el-mask-color: rgba(10, 14, 20, 0.72);
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', Inter, 'Helvetica Neue', Arial,
+    sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  background: var(--adm-bg-gradient);
+  background-attachment: fixed;
+  color: var(--adm-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------- 等高卡片网格 ---------------- */
+/* 同一行内的 el-col 拉伸为等高，卡片撑满列高，消除高低错乱 */
+.el-row.adm-stretch > .el-col {
+  display: flex;
+}
+.el-row.adm-stretch > .el-col > .adm-card {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+/* ---------------- 通用卡片 ---------------- */
+.adm-card {
+  background: var(--adm-surface);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid var(--adm-border);
+  border-radius: var(--adm-radius-md);
+  box-shadow: var(--adm-shadow-medium);
+}
+
+.adm-card--hover {
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+}
+
+.adm-card--hover:hover {
+  box-shadow: var(--adm-shadow-high);
+  transform: translateY(-3px);
+}
+
+/* 表格卡片：内容贴边，让表格与分页条通栏 */
+.adm-card--table .el-card__body {
+  padding: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* 页面标题 */
+.adm-page-title {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  line-height: 1.35;
+  color: var(--adm-text-primary);
+}
+
+.adm-page-desc {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--adm-text-secondary);
+}
+
+/* 区块标题 */
+.adm-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--adm-text-primary);
+}
+
+/* ---------------- 全项目公共类（各页统一调用，勿在页面内重复定义）----------------
+   以下类由所有列表页共用，集中在此全局定义，保证布局 / 样式 / 间隔一致。
+   页面内不再写 scoped 版本：scoped 选择器优先级更高，会覆盖全局导致样式分叉。 */
+/* 页面根容器：PageHeader / 统计卡 / 表格卡片之间统一 16px 间隔。
+   所有页面根节点必须用 <div class="stack">，缺了它区块间距会塌陷。 */
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+/* 统计卡容器：所有页统一栅格与间隔 */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+}
+/* 单元格内链接（抖音链接 / 制作回链等） */
+.cell-link {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* 危险操作文字（删除按钮） */
+.danger-text { color: var(--el-color-danger); }
+/* 分区小标题（弹窗 / 卡片内的二级标题） */
+.rec-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--adm-text-primary);
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--adm-border);
+}
+/* 表单提示文字 */
+.form-tip {
+  font-size: 12px;
+  color: var(--adm-text-placeholder);
+  line-height: 1.6;
+  margin-top: 4px;
+}
+/* 参考视频复合列内的内联标签组 */
+.adm-cell-tags.is-inline { margin-top: 3px; }
+/* 表格卡片头部（标题 + 说明左右分布） */
+.table-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ---------------- 侧边栏菜单 ---------------- */
+.adm-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  margin-bottom: 4px;
+  border-radius: 12px;
+  font-size: 14px;
+  color: var(--adm-text-regular);
+  text-decoration: none;
+  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.adm-menu-item:hover {
+  background: var(--adm-hover-bg);
+  color: var(--adm-text-primary);
+}
+
+.adm-menu-item.is-active {
+  background: var(--adm-active-bg);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.adm-menu-item.is-active .el-icon {
+  color: var(--el-color-primary);
+}
+
+/* 折叠态：参考窄栏样式——图标在上、文字在下，整体高亮 */
+.adm-sidebar.is-collapsed .adm-nav {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+.adm-sidebar.is-collapsed .adm-menu-item {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: auto;
+  min-height: 52px;
+  padding: 6px 0;
+  margin-bottom: 4px;
+  border-radius: 12px;
+}
+
+.adm-sidebar.is-collapsed .adm-menu-item:hover {
+  transform: none;
+}
+
+.adm-sidebar.is-collapsed .adm-menu-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.adm-sidebar.is-collapsed .adm-menu-text {
+  display: block;
+  max-width: 100%;
+  padding: 0 1px;
+  font-size: 10.5px;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -0.2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-sidebar.is-collapsed .adm-menu-item.is-active .adm-menu-text {
+  font-weight: 700;
+}
+
+.adm-sidebar.is-collapsed .adm-brand-text,
+.adm-sidebar.is-collapsed .adm-user-text {
+  display: none;
+}
+
+/* ---------------- 表格 ---------------- */
+.el-table {
+  --el-table-border-color: var(--adm-table-line);
+  --el-table-border: 1px solid var(--adm-table-line);
+  --el-table-header-bg-color: transparent;
+  --el-table-header-text-color: var(--adm-text-regular);
+  --el-table-row-hover-bg-color: var(--adm-panel-hover);
+  --el-table-tr-bg-color: transparent;
+  --el-table-bg-color: transparent;
+  font-size: 14px;
+}
+
+.el-table th.el-table__cell {
+  background: var(--adm-panel-soft);
+  color: var(--adm-text-regular);
+  font-weight: 600;
+}
+
+.el-table .el-table__cell {
+  padding: 10px 0;
+  border-bottom-color: var(--adm-table-line);
+}
+
+.el-table .el-table__cell.is-right {
+  text-align: right;
+}
+
+/* 去掉 EP 边框表格的外框、竖向格线与补丁线，只保留柔和横向分隔线 */
+.el-table--border::after,
+.el-table--border::before,
+.el-table--border .el-table__inner-wrapper::after,
+.el-table .el-table__inner-wrapper::before,
+.el-table .el-table__inner-wrapper::after,
+.el-table__border-left-patch,
+.el-table__border-right-patch,
+.el-table__border-bottom-patch {
+  background-color: transparent !important;
+}
+
+.el-table--border .el-table__cell {
+  border-right: none;
+}
+
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: var(--adm-panel-soft);
+}
+
+.el-table--border,
+.el-table--group {
+  border-radius: var(--adm-radius-md);
+  overflow: hidden;
+}
+
+/* 表头胶囊化：EP 表格头是直角块，这里做圆角收边 */
+.el-table th.el-table__cell:first-child {
+  border-top-left-radius: var(--adm-radius-sm);
+}
+
+.el-table th.el-table__cell:last-child {
+  border-top-right-radius: var(--adm-radius-sm);
+}
+
+/* ---------------- 表格：表头与内容的对齐与密度 ---------------- */
+/* 表头与数据行统一为固定高度：内容两行 + 话题标签换行空间，行高不再随内容伸缩。 */
+.el-table th.el-table__cell {
+  padding: 9px 0;
+  height: 66px;
+  vertical-align: middle;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+.el-table th.el-table__cell .cell {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+}
+.el-table th.el-table__cell.is-right .cell { justify-content: flex-end; }
+.el-table th.el-table__cell.is-center .cell { justify-content: center; }
+
+/* 表格行高固定并适度加高：话题标签可换行到两行，行高保持稳定不跳动。 */
+.el-table td.el-table__cell {
+  padding: 9px 0;
+  vertical-align: middle;
+  height: 72px;
+}
+/* 单元格内容：flex 纵向排列，单行垂直居中；两行结构（名称 + 作者）保持上下堆叠；
+   水平对齐沿用列的 align 配置（is-right / is-center）。 */
+.el-table td.el-table__cell .cell {
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+}
+.el-table td.el-table__cell.is-right .cell { align-items: flex-end; }
+.el-table td.el-table__cell.is-center .cell { align-items: center; }
+
+/* 表头与内容左内边距一致，避免表头文字与首列内容错位 */
+.el-table .cell {
+  padding-left: 14px;
+  padding-right: 14px;
+  line-height: 20px;
+}
+
+/* 行 hover：左侧色条标记当前行 */
+.el-table .el-table__body tr.el-table__row:hover > td.el-table__cell {
+  box-shadow: none;
+}
+
+.el-table .el-table__body tr.el-table__row:hover > td.el-table__cell:first-child {
+  box-shadow: inset 3px 0 0 var(--el-color-primary);
+}
+
+/* ---------------- 单元格文本：限长省略 + hover 全量 ---------------- */
+/* 单行省略，配合 title 属性让鼠标悬浮显示完整内容 */
+.adm-cell-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--adm-text-primary);
+}
+
+/* 两行截断（标题类单元格） */
+.adm-cell-text--clamp2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* 数值单元格：右对齐 + 等宽数字 */
+.adm-cell-num {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--adm-text-primary);
+  white-space: nowrap;
+}
+
+/* 副标题（标题下方的补充说明） */
+.adm-cell-sub {
+  margin-top: 2px;
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--adm-text-placeholder);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 占位符（无内容） */
+.adm-cell-empty {
+  font-size: 12.5px;
+  color: var(--adm-text-placeholder);
+}
+
+/* 时间列：等宽数字、固定宽度不跳动 */
+.adm-cell-time {
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--adm-text-secondary);
+  white-space: nowrap;
+}
+
+/* 操作列：按钮紧凑排列 */
+.adm-cell-actions {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
+.adm-cell-actions .el-button {
+  padding-left: 6px;
+  padding-right: 6px;
+  margin-left: 0;
+}
+
+/* 数字：等宽对齐但保持无衬线观感
+   （JetBrains Mono 未安装时会回退到 Consolas，其斜杠零在大字号下观感差） */
+.adm-num {
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', Inter, 'Helvetica Neue', Arial,
+    sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.2px;
+}
+
+/* 归属标记：2px 实心方块 */
+.adm-owner-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 1px;
+  background: var(--el-color-primary);
+}
+
+.adm-owner-dot.is-muted {
+  background: var(--adm-text-placeholder);
+}
+
+/* ---------------- 表格列宽：最大 / 最小约束 ----------------
+   规则：
+   1. 主内容列（名称 / 参考视频）用 min-width，让 el-table 把剩余宽度
+      分配给它，表格始终占满容器，不出现右侧空白；
+   2. 其余列用固定 width，保证列宽稳定、数值列不跳动；
+   3. 表格外层 .adm-table-wrap 不设 max-width 居中，宽屏时表格铺满内容区，
+      配合固定列宽 + 横向滚动兜底，不会出现横向滚动条。 */
+.adm-table-wrap {
+  width: 100%;
+  min-width: 0;
+}
+
+/* 窄版表格（列少时允许更窄的容器，避免在宽屏上拉得过散） */
+.adm-table-wrap--narrow {
+  --adm-table-max-width: 1080px;
+}
+
+/* 封面缩略图单元格 */
+.adm-cell-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.adm-cover-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--adm-surface-sunken);
+  border: 1px solid var(--adm-border);
+  display: block;
+}
+/* 图片缺失：统一使用通用占位图，保持视觉一致（亮暗主题均可辨识） */
+.adm-cover-thumb.is-empty,
+.adm-video-badge.is-empty,
+.adm-cell-avatar.is-empty,
+.drawer-video-cover.is-empty,
+.char-avatar--empty {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+/* 标签单元格：超出列宽自动换行，最多两行，超出折叠 */
+.adm-cell-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  align-content: center;
+  width: 100%;
+  max-width: 100%;
+  max-height: 56px;
+  overflow: hidden;
+}
+/* 标签便签：统一浅蓝色底 */
+.adm-tag-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 1px 7px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  line-height: 18px;
+  color: #2f6fb5;
+  background: #dcecff;
+  border: 1px solid #c2dcfa;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-tag-chip.is-more {
+  color: #2f6fb5;
+  background: #dcecff;
+  border-color: #c2dcfa;
+}
+html.dark .adm-tag-chip,
+html.dark .adm-tag-chip.is-more {
+  color: #a8ccf5;
+  background: rgba(123, 163, 209, 0.2);
+  border-color: rgba(123, 163, 209, 0.3);
+}
+.adm-cell-tags-empty {
+  font-size: 12.5px;
+  color: var(--adm-text-placeholder);
+}
+
+/* 视频文件单元格：可播放预览 */
+.adm-cell-video {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.adm-video-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  color: var(--adm-mint);
+  background: var(--adm-mint-soft);
+  border: 1px solid var(--adm-mint-soft);
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.adm-video-badge:hover {
+  opacity: 0.78;
+}
+.adm-video-badge.is-empty {
+  color: var(--adm-text-placeholder);
+  background: transparent;
+  border-color: var(--adm-border);
+  cursor: default;
+}
+
+/* 名称单元格里的外链（点击名称跳转抖音） */
+.adm-cell-link {
+  color: var(--adm-blue);
+  text-decoration: none;
+  cursor: pointer;
+}
+.adm-cell-link:hover {
+  text-decoration: underline;
+}
+
+/* 表格里的头像小圆 */
+.adm-cell-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--adm-surface-sunken);
+  border: 1px solid var(--adm-border);
+  display: block;
+}
+.adm-cell-avatar.is-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--adm-text-placeholder);
+}
+
+/* ---------------- Element Plus 组件玻璃化适配 ---------------- */
+/* 卡片：去掉 EP 默认边框/阴影，交给 .adm-card */
+.el-card {
+  --el-card-border-color: transparent;
+  --el-card-border-radius: var(--adm-radius-md);
+  --el-card-padding: 20px;
+  --el-card-bg-color: var(--adm-surface);
+}
+
+.el-card__header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--adm-border);
+}
+
+.el-card__body {
+  padding: 20px;
+}
+
+/* 按钮：圆角更饱满，与大圆角卡片呼应 */
+.el-button {
+  --el-button-border-radius: 12px;
+  font-weight: 600;
+}
+
+.el-button--primary {
+  --el-button-bg-color: #5b8fd6;
+  --el-button-border-color: #5b8fd6;
+  --el-button-hover-bg-color: #4d82cd;
+  --el-button-hover-border-color: #4d82cd;
+  --el-button-active-bg-color: #4477bf;
+  box-shadow: 0 4px 14px rgba(91, 143, 214, 0.32);
+}
+
+/* 输入类控件：半透明底 + 柔和描边 */
+.el-input__wrapper,
+.el-textarea__inner,
+.el-select__wrapper {
+  background-color: var(--adm-input-bg);
+  box-shadow: 0 0 0 1px var(--adm-border-dark) inset;
+  border-radius: 12px;
+}
+
+.el-input__wrapper:hover,
+.el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--adm-border-deep) inset;
+}
+
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused {
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.42) inset;
+}
+
+.el-textarea__inner {
+  padding: 10px 14px;
+}
+
+/* 标签：柔和描边风格 */
+.el-tag {
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+/* 弹窗：玻璃卡片 */
+.el-dialog {
+  border-radius: var(--adm-radius-md);
+  overflow: hidden;
+  background: var(--adm-surface-solid);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  box-shadow: var(--adm-shadow-high);
+}
+
+/* 弹窗头部：图标徽章 + 标题/副标题 */
+.el-dialog__header {
+  margin-right: 0;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--adm-border);
+}
+
+.el-dialog__headerbtn {
+  top: 14px;
+  right: 12px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+}
+
+.el-dialog__headerbtn:hover {
+  background: var(--adm-active-bg);
+  color: var(--el-color-primary);
+}
+
+.el-dialog__title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--adm-text-primary);
+}
+
+/* 自定义头部结构：图标徽章 + 标题 + 副标题 */
+.adm-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 32px;
+}
+
+.adm-dialog-head-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 19px;
+  color: var(--el-color-primary);
+  background: var(--adm-active-bg);
+  border: 1px solid var(--adm-border-dark);
+}
+
+.adm-dialog-head-icon.is-coral { color: var(--adm-coral); background: var(--adm-coral-bg); }
+.adm-dialog-head-icon.is-mint { color: var(--adm-mint); background: var(--adm-mint-bg); }
+.adm-dialog-head-icon.is-amber { color: var(--adm-amber); background: var(--adm-amber-bg); }
+.adm-dialog-head-icon.is-lilac { color: var(--adm-lilac); background: var(--adm-lilac-bg); }
+
+.adm-dialog-head-text {
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.adm-dialog-head-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--adm-text-primary);
+}
+
+.adm-dialog-head-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--adm-text-secondary);
+}
+
+/* 弹窗内容 */
+.el-dialog__body {
+  padding: 20px;
+}
+
+/* 发布数据-匹配弹窗：整体限高，内容区滚动，头部与底部按钮常驻可见 */
+.match-dialog.el-dialog {
+  top: 2vh;
+  max-height: 84vh;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.match-dialog.el-dialog .el-dialog__header { flex: 0 0 auto; }
+.match-dialog.el-dialog .el-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.match-dialog.el-dialog .el-dialog__footer { flex: 0 0 auto; }
+
+/* 视频创作编辑弹窗：内容较长时限高并内部滚动，保证底部按钮常驻可见 */
+.edit-dialog.el-dialog {
+  top: 2vh;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0;
+}
+.edit-dialog.el-dialog .el-dialog__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  scrollbar-width: none; /* Firefox：去掉滚动条 */
+}
+/* 隐藏弹窗内容区滚动条（保留可滚动能力） */
+.edit-dialog.el-dialog .el-dialog__body::-webkit-scrollbar { display: none; }
+.edit-dialog.el-dialog .el-dialog__body .edit-dialog-body {
+  height: auto;
+  max-height: none;
+  overflow: visible;
+}
+
+/* 弹窗底部：按钮右对齐、胶囊风格 */
+.el-dialog__footer {
+  padding: 12px 20px 18px;
+  border-top: 1px solid var(--adm-border);
+}
+
+.el-dialog__footer .el-button {
+  min-width: 76px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+/* 遮罩：轻微加暗，衬托玻璃层 */
+.el-overlay {
+  background-color: rgba(61, 82, 102, 0.32);
+  backdrop-filter: blur(3px);
+}
+
+/* 描述列表 */
+.el-descriptions {
+  --el-descriptions-item-bordered-label-background: var(--adm-surface-hover);
+}
+
+/* 空状态 */
+.el-empty__description p {
+  color: var(--adm-text-secondary);
+}
+
+/* ---------------- 深色主题下的补充修正 ---------------- */
+html.dark .el-overlay {
+  background-color: rgba(4, 8, 14, 0.6);
+}
+
+html.dark .el-button--primary {
+  --el-button-bg-color: #3a7bd5;
+  --el-button-border-color: #3a7bd5;
+  --el-button-hover-bg-color: #4a8be5;
+  --el-button-hover-border-color: #4a8be5;
+  --el-button-active-bg-color: #2f6cc0;
+  box-shadow: 0 4px 14px rgba(58, 123, 213, 0.38);
+}
+
+html.dark .el-tag {
+  border-color: var(--adm-border-deep);
+}
+
+html.dark .el-tag--success {
+  --el-tag-bg-color: rgba(103, 194, 58, 0.16);
+  --el-tag-border-color: rgba(103, 194, 58, 0.4);
+  --el-tag-text-color: #95d475;
+}
+
+html.dark .el-tag--warning {
+  --el-tag-bg-color: rgba(230, 162, 60, 0.16);
+  --el-tag-border-color: rgba(230, 162, 60, 0.4);
+  --el-tag-text-color: #efb978;
+}
+
+html.dark .el-tag--danger {
+  --el-tag-bg-color: rgba(245, 108, 108, 0.16);
+  --el-tag-border-color: rgba(245, 108, 108, 0.4);
+  --el-tag-text-color: #f58585;
+}
+
+html.dark .el-tag--primary {
+  --el-tag-bg-color: rgba(64, 158, 255, 0.16);
+  --el-tag-border-color: rgba(64, 158, 255, 0.4);
+  --el-tag-text-color: #7cb4f7;
+}
+
+html.dark .el-tag--info {
+  --el-tag-bg-color: rgba(144, 147, 153, 0.16);
+  --el-tag-border-color: rgba(144, 147, 153, 0.4);
+  --el-tag-text-color: #a6a9ad;
+}
+
+html.dark .el-switch.is-checked .el-switch__core {
+  background-color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+}
+
+html.dark .el-dialog,
+html.dark .el-message-box {
+  background: var(--adm-surface-solid);
+}
+
+html.dark .el-dropdown-menu,
+html.dark .el-select-dropdown__item {
+  background: var(--adm-surface-solid);
+}
+
+html.dark .el-picker-panel,
+html.dark .el-popper.is-light {
+  background: var(--adm-surface-solid);
+  border-color: var(--adm-border-dark);
+}
+
+html.dark .el-popper.is-light .el-popper__arrow::before {
+  background: var(--adm-surface-solid);
+  border-color: var(--adm-border-dark);
+}
+
+html.dark .el-radio-button__inner,
+html.dark .el-checkbox__inner {
+  background: var(--adm-input-bg);
+}
+
+/* ---------------- 工具类 ---------------- */
+.adm-divider {
+  height: 1px;
+  background: var(--adm-border);
+}
+
+/* 超管标签 */
+.admin-manage-tag {
+  --el-tag-border-color: #f0d9a8;
+  --el-tag-bg-color: #fdf6ec;
+  --el-tag-text-color: #b88230;
+}
+
+/* 移动端表格转卡片 */
+@media (max-width: 768px) {
+  .adm-hide-mobile {
+    display: none !important;
+  }
+}
+
+/* ---------------- 抽屉通用骨架（DetailDrawer 与内嵌编辑抽屉共用） ---------------- */
+.adm-drawer .el-drawer__body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.adm-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--adm-border);
+  background: var(--adm-surface);
+  flex: 0 0 auto;
+}
+.adm-drawer-head-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--adm-blue);
+  background: var(--adm-blue-bg);
+  flex: 0 0 auto;
+}
+.adm-drawer-head-text { min-width: 0; flex: 1; }
+.adm-drawer-head-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--adm-text-primary);
+  line-height: 1.3;
+}
+.adm-drawer-head-sub {
+  font-size: 12px;
+  color: var(--adm-text-muted);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.adm-drawer-close {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--adm-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.adm-drawer-close:hover { background: var(--adm-hover-bg); color: var(--adm-text-primary); }
+.adm-drawer-body { flex: 1 1 auto; overflow-y: auto; padding: 16px 20px 24px; }
+
+/* ---------------- 滚动条 ---------------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--adm-border-deep);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--adm-text-placeholder);
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------------- 低分辨率屏幕适配 ----------------
+   1366×768 等常见笔记本：压缩页面间距、卡片内边距与表格行高，
+   保证核心按钮和表格字段在首屏可见，不出现无谓的横向溢出。 */
+@media (max-width: 1366px) {
+  :root {
+    --adm-sidebar-width: 208px;
+    --adm-header-height: 56px;
+    --adm-radius-md: 16px;
+  }
+  .stack { gap: 12px; }
+  .stat-row {
+    grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+    gap: 12px;
+  }
+  .el-card__body { padding: 14px; }
+  .el-card__header { padding: 12px 14px; }
+  .el-table .cell { padding-left: 10px; padding-right: 10px; }
+  .el-table th.el-table__cell {
+    height: 56px;
+    padding: 6px 0;
+  }
+  .el-table th.el-table__cell .cell { min-height: 40px; }
+  .el-table td.el-table__cell {
+    height: 62px;
+    padding: 6px 0;
+  }
+  .el-table td.el-table__cell .cell { min-height: 46px; }
+  .el-dialog__body { padding: 16px; }
+  .el-dialog__footer { padding: 10px 16px 14px; }
+  .page-head { min-height: 52px; padding-bottom: 10px; }
+  .page-head-text .adm-page-title { font-size: 18px; }
+  .adm-card--table .el-card__body { padding: 0; }
+}
+
+@media (max-width: 1100px) {
+  :root {
+    --adm-sidebar-width: 196px;
+  }
+  .el-table { font-size: 13px; }
+  .adm-page-desc { font-size: 12px; }
+  .page-head-right { gap: 6px; }
+  .adm-hide-narrow { display: none !important; }
+}
+
+/* ============================================================
+   全站动效体系：统一的入场 / 悬停 / 呼吸 / 栅格骨架动画
+   所有关键帧与工具类集中在此，页面只调用不重复定义。
+   ============================================================ */
+@keyframes adm-rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes adm-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes adm-breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.62; transform: scale(0.94); }
+}
+@keyframes adm-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes adm-sweep {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(210%); }
+}
+
+/* 页面区块入场：.stack 直接子元素依次上浮，页面切换不再生硬。
+   弹窗遮罩（el-overlay）也在 .stack 内，必须排除，否则每次开关弹窗都会重放入场动画造成闪现。 */
+.stack > *:not(.el-overlay) {
+  animation: adm-rise var(--adm-dur-md) var(--adm-ease-out) both;
+}
+.stack > *:not(.el-overlay):nth-child(1) { animation-delay: 0.01s; }
+.stack > *:not(.el-overlay):nth-child(2) { animation-delay: 0.07s; }
+.stack > *:not(.el-overlay):nth-child(3) { animation-delay: 0.13s; }
+.stack > *:not(.el-overlay):nth-child(4) { animation-delay: 0.19s; }
+.stack > *:not(.el-overlay):nth-child(n+5) { animation-delay: 0.24s; }
+
+/* 可手动挂载的入场类：卡片 / 面板 / 列表项 */
+.adm-anim-in { animation: adm-rise var(--adm-dur-md) var(--adm-ease-out) both; }
+.adm-anim-fade { animation: adm-fade var(--adm-dur-sm) var(--adm-ease-soft) both; }
+.adm-anim-breathe { animation: adm-breathe 2.6s var(--adm-ease-soft) infinite; }
+
+/* 列表项交错入场：父容器加 adm-stagger，子项自动错峰 */
+.adm-stagger > * { animation: adm-rise var(--adm-dur-sm) var(--adm-ease-out) both; }
+.adm-stagger > *:nth-child(1) { animation-delay: 0.02s; }
+.adm-stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.adm-stagger > *:nth-child(3) { animation-delay: 0.10s; }
+.adm-stagger > *:nth-child(4) { animation-delay: 0.14s; }
+.adm-stagger > *:nth-child(5) { animation-delay: 0.18s; }
+.adm-stagger > *:nth-child(n+6) { animation-delay: 0.22s; }
+
+/* 栅格骨架：数据加载时以表格同构的网格占位，避免空白跳动 */
+.adm-card--table { position: relative; }
+.adm-card--table > .adm-grid-skeleton {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: var(--adm-surface-solid);
+  border-radius: var(--adm-radius-md);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.adm-grid-skeleton {
+  position: relative;
+  width: 100%;
+  padding: 14px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+/* 卡片资产页：网格骨架（无表头、多行卡片位） */
+.adm-card > .adm-grid-skeleton.is-assets {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  background: var(--adm-surface-solid);
+  border-radius: var(--adm-radius-md);
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  align-content: start;
+  gap: 16px;
+  padding: 20px;
+}
+.adm-grid-skeleton.is-assets .gs-row {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: auto;
+  border: none;
+}
+.adm-grid-skeleton.is-assets .gs-cell { width: 100% !important; }
+.adm-grid-skeleton.is-assets .gs-cell.is-thumb { height: 132px; border-radius: 14px; }
+.gs-row {
+  display: grid;
+  grid-template-columns: repeat(var(--gs-cols, 6), minmax(0, 1fr));
+  gap: 14px;
+  align-items: center;
+  height: 72px;
+  border-bottom: 1px solid var(--adm-table-line);
+}
+.gs-row.is-head { height: 60px; }
+.gs-row:last-child { border-bottom: none; }
+.gs-cell {
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(
+    90deg,
+    var(--adm-panel-soft) 0%,
+    var(--adm-panel-hover) 45%,
+    var(--adm-panel-soft) 90%
+  );
+  background-size: 200% 100%;
+  animation: adm-shimmer 1.35s linear infinite;
+}
+.gs-cell.is-thumb { height: 42px; width: 42px; border-radius: 9px; }
+.gs-cell.is-head { height: 11px; opacity: 0.72; }
+.gs-row:nth-child(2n) .gs-cell { animation-delay: 0.12s; }
+.gs-row:nth-child(3n) .gs-cell { animation-delay: 0.24s; }
+.gs-sheen {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgba(123, 163, 209, 0.09) 50%,
+    transparent 70%
+  );
+  width: 46%;
+  animation: adm-sweep 2s var(--adm-ease-soft) infinite;
+}
+
+/* 卡片加载时的玻璃微光，与骨架协同 */
+.adm-card.is-loading { position: relative; overflow: hidden; }
+/* 加载时骨架屏替代真实内容：表格 / 资产网格，避免骨架下方出现空白占位 */
+.adm-card.is-loading .adm-table-wrap,
+.adm-card.is-loading .char-grid,
+.adm-card.is-loading .mat-grid { display: none; }
+.adm-card.is-loading::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.18) 50%, transparent 65%);
+  width: 40%;
+  animation: adm-sweep 2.4s var(--adm-ease-soft) infinite;
+}
+html.dark .adm-card.is-loading::after {
+  background: linear-gradient(100deg, transparent 35%, rgba(255, 255, 255, 0.05) 50%, transparent 65%);
+}
+
+/* 全站图标统一正圆：品牌 / 页头 / 统计卡 / 弹窗 / 按钮 / 分类平台图标 */
+.adm-brand-logo,
+.page-head-icon,
+.adm-stat-icon,
+.settings-icon,
+.panel-icon,
+.kpi-icon,
+.adm-dialog-head-icon,
+.adm-confirm-icon,
+.adm-drawer-head-icon,
+.adm-header-icon-btn,
+.cover-icon-btn,
+.login-feature-icon,
+.option-badge-letter,
+.option-badge-img {
+  border-radius: 999px !important;
+}
+
+/* 尊重系统「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  .stack > *,
+  .adm-anim-in,
+  .adm-anim-fade,
+  .adm-anim-breathe,
+  .adm-stagger > *,
+  .gs-cell,
+  .gs-sheen,
+  .adm-card.is-loading::after {
+    animation: none !important;
+  }
+}
