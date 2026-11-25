@@ -1,4 +1,4 @@
-# AI 视频资产管理（Assets Console）
+# AI 视频创作管理台（Creation Console）
 
 本地部署的短视频资产管理平台：创意收集 → 视频创作 → 数据中心 → 发布账号，配套人物资产、素材共享、角色权限与配置中心。前端 Vue 3 + Element Plus + Vite，后端 FastAPI + SQLAlchemy + SQLite。
 

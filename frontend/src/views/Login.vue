@@ -53,19 +53,19 @@
                 </svg>
               </div>
               <div class="login-brand-text">
-                <h1 class="login-brand-name font-bold tracking-tight" style="color: #1e293b">AI 视频资产管理</h1>
-                <div class="text-[13px] text-[#94a3b8] tracking-wide mt-1.5">Asset Console · 本地部署</div>
+                <h1 class="login-brand-name font-bold tracking-tight" style="color: #1e293b">AI 视频创作管理台</h1>
+                <div class="text-[13px] text-[#94a3b8] tracking-wide mt-1.5">Creation Console · 本地部署</div>
               </div>
             </div>
 
             <p class="text-xl text-[#475569] leading-relaxed mb-7 login-brand-subtitle">
-              <span>让视频素材</span>
+              <span>从创意到发布</span>
               <span class="login-marquee-vertical" aria-hidden="true">
                 <span class="login-marquee-stack">
-                  <span>统一归档，一处可查</span>
-                  <span>按人物与分类快速检索</span>
-                  <span>提示词沉淀，随时复用</span>
-                  <span>统一归档，一处可查</span>
+                  <span>一站式管理</span>
+                  <span>全流程可追踪</span>
+                  <span>数据自动更新</span>
+                  <span>一站式管理</span>
                 </span>
               </span>
             </p>
@@ -76,36 +76,36 @@
                 <div class="login-feature-icon w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
                   <svg class="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                   </svg>
                 </div>
                 <div class="ml-4 text-left">
-                  <h3 class="text-[17px] font-semibold text-[#334155]">抖音文案一键拆分</h3>
-                  <p class="text-[13.5px] text-[#64748b] leading-relaxed mt-0.5">粘贴分享文案，自动提取视频名称、链接与话题标签</p>
+                  <h3 class="text-[17px] font-semibold text-[#334155]">创作流程一站打通</h3>
+                  <p class="text-[13.5px] text-[#64748b] leading-relaxed mt-0.5">创意灵感、视频创作、发布数据逐级流转，进度与状态全程可查</p>
                 </div>
               </div>
               <div class="login-feature flex items-center cursor-default">
                 <div class="login-feature-icon w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center flex-shrink-0">
                   <svg class="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                   </svg>
                 </div>
                 <div class="ml-4 text-left">
-                  <h3 class="text-[17px] font-semibold text-[#334155]">人物资产独立成库</h3>
-                  <p class="text-[13.5px] text-[#64748b] leading-relaxed mt-0.5">一个人物多张图，多条视频复用，使用次数自动统计</p>
+                  <h3 class="text-[17px] font-semibold text-[#334155]">账号数据自动更新</h3>
+                  <p class="text-[13.5px] text-[#64748b] leading-relaxed mt-0.5">扫码登录抖音账号，定时采集作品与粉丝数据，历史快照随时对照</p>
                 </div>
               </div>
               <div class="login-feature flex items-center cursor-default">
                 <div class="login-feature-icon w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center flex-shrink-0">
                   <svg class="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h2a2 2 0 01-2-2z" />
+                      d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
                   </svg>
                 </div>
                 <div class="ml-4 text-left">
-                  <h3 class="text-[17px] font-semibold text-[#334155]">提示词与数据沉淀</h3>
-                  <p class="text-[13.5px] text-[#64748b] leading-relaxed mt-0.5">提示词分段编辑可检索，点赞播放数据按时间追踪</p>
+                  <h3 class="text-[17px] font-semibold text-[#334155]">资产与权限统一沉淀</h3>
+                  <p class="text-[13.5px] text-[#64748b] leading-relaxed mt-0.5">人物资产、素材分库复用，角色权限与配置中心集中管控</p>
                 </div>
               </div>
             </div>
@@ -122,7 +122,7 @@
                     d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
               </div>
-              <span class="ml-3 text-xl font-bold text-[#1e293b]">AI 视频资产管理</span>
+              <span class="ml-3 text-xl font-bold text-[#1e293b]">AI 视频创作管理台</span>
             </div>
 
             <div class="login-card-wrap">
@@ -185,7 +185,7 @@
               </div>
             </div>
 
-            <div class="login-foot-note">© 2026 AI 视频资产管理平台 · 数据不出本机</div>
+            <div class="login-foot-note">© 2026 AI 视频创作管理台 · 数据不出本机</div>
           </div>
         </div>
       </div>
