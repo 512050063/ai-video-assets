@@ -305,9 +305,17 @@ def _run_browser_collector(
 ) -> Optional[dict]:
     """调用 Node Playwright 采集脚本，返回解析后的结果（失败返回 None）。"""
     if not os.path.exists(_COLLECTOR_SCRIPT):
-        return None
+        raise CollectError(
+            "浏览器采集组件缺失：未找到 backend/collector/douyin_collect.mjs",
+            channel="browser",
+            manual_hint="部署包需包含 backend/collector 目录，并确认后端环境变量 AVM_PROFILE_ROOT 等路径配置正确",
+        )
     if not os.path.isdir(_NODE_MODULES):
-        return None
+        raise CollectError(
+            f"浏览器采集依赖缺失：未找到 Playwright 模块目录 {_NODE_MODULES}",
+            channel="browser",
+            manual_hint="在部署主机执行 cd frontend && npm install && npx playwright install chromium；或用 AVM_NODE_MODULES 指向已安装 node_modules",
+        )
     profile = _profile_dir(profile_key, dedicated=dedicated)
     os.makedirs(profile, exist_ok=True)
     env = dict(os.environ)
@@ -532,14 +540,21 @@ def login_douyin(profile_key: str = "") -> dict:
     返回当前登录用户信息（尽力而为：昵称 / 抖音号 / sec_uid），
     供调用方回填发布账号资料并记录登录时间。
     """
-    return _run_browser_collector(
+    result = _run_browser_collector(
         "login",
         {"url": "https://www.douyin.com/", "profile_key": profile_key},
         timeout=180,
         headless=False,
         profile_key=profile_key,
         dedicated=bool(profile_key),
-    ) or {}
+    )
+    if not result or not result.get("logged_in"):
+        raise CollectError(
+            "浏览器未返回有效登录态，已取消建号，请检查部署环境的浏览器依赖",
+            channel="browser",
+            manual_hint="确认 Node.js/Playwright/Chromium 已安装，且后端进程运行在可打开图形窗口的环境；Linux 无桌面时需配置 Xvfb",
+        )
+    return result
 
 
 def now_iso() -> str:

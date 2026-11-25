@@ -655,7 +655,10 @@ async function loginNewAccount() {
   try {
     const { data } = await api.post('/douyin/login', {}, { timeout: 200000 })
     if (!data.ok) {
-      ElMessage.warning(data.message || '未检测到登录态，请重试')
+      ElMessage.warning({
+        message: [data.message || '未检测到登录态，请重试', data.manual_hint].filter(Boolean).join('｜'),
+        duration: 8000,
+      })
       return
     }
     ElMessage.success(data.created ? '扫码成功，已新建账号' : `扫码成功，已更新账号「${data.account_name || ''}」`)
@@ -675,7 +678,10 @@ async function loginAccount(row) {
   try {
     const { data } = await api.post('/douyin/login', { account_id: row.id }, { timeout: 200000 })
     if (!data.ok) {
-      ElMessage.warning(data.message || '未检测到登录态，请重试')
+      ElMessage.warning({
+        message: [data.message || '未检测到登录态，请重试', data.manual_hint].filter(Boolean).join('｜'),
+        duration: 8000,
+      })
     } else {
       ElMessage.success('登录态已保存')
     }

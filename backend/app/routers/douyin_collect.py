@@ -644,6 +644,17 @@ def douyin_login(
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"登录流程失败：{exc}")
 
+    # 防御：登录态未确认时绝不建号、绝不标记为已登录
+    if not result or not result.get("logged_in"):
+        _mark_login_state(account, False)
+        db.commit()
+        return {
+            "ok": False,
+            "need_login": True,
+            "message": "未获取到抖音登录态，已取消建号",
+            "manual_hint": "请确认部署环境已安装 Node.js / Playwright / Chromium，且后端可打开图形窗口，然后重新扫码",
+        }
+
     # 未指定账号：按扫码得到的信息匹配已有账号，匹配不到则自动建号
     if account is None:
         sec_uid = (result.get("sec_uid") or "").strip()

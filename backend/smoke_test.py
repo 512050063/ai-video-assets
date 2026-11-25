@@ -1067,6 +1067,50 @@ def run():
     ok("视频采集失败返回可读提示", code == 200 and fetch_st.get("ok") is False
        and bool(fetch_st.get("message")), fetch_st.get("message") if isinstance(fetch_st, dict) else fetch_st)
 
+    section("16b. 扫码登录失败保护：依赖缺失不静默建号")
+    try:
+        import tempfile
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+        from app.models import User, PublishAccount
+        from app.schemas import DouyinLoginIn
+        from app.routers import douyin_collect as dc2
+        import app.douyin_collector as dcol
+
+        # 依赖目录不存在时，采集器必须明确抛错，不能返回空字典被当成登录成功
+        _old_modules = dcol._NODE_MODULES
+        dcol._NODE_MODULES = os.path.join(tempfile.gettempdir(), "__AVM_NO_NODE_MODULES__")
+        try:
+            try:
+                dcol.login_douyin(PREFIX + "profile")
+                ok("扫码登录依赖缺失时明确报错", False, "未抛异常")
+            except dcol.CollectError as exc:
+                ok("扫码登录依赖缺失时明确报错",
+                   "依赖缺失" in exc.message and bool(exc.manual_hint), exc.message)
+        finally:
+            dcol._NODE_MODULES = _old_modules
+
+        # 登录态为空时，路由不得建号、不得标记已登录
+        _engine2 = create_engine("sqlite:///" + DB_PATH.replace("\\", "/"),
+                                 connect_args={"check_same_thread": False})
+        s2 = sessionmaker(bind=_engine2)()
+        try:
+            admin = s2.query(User).filter(User.username == "admin").first()
+            before = s2.query(PublishAccount).count()
+            _old_login = dc2.login_douyin
+            dc2.login_douyin = lambda *a, **k: {}
+            try:
+                res = dc2.douyin_login(DouyinLoginIn(), s2, admin)
+            finally:
+                dc2.login_douyin = _old_login
+            after = s2.query(PublishAccount).count()
+            ok("登录态为空时不建号且不误标已登录",
+               res.get("ok") is False and after == before, res)
+        finally:
+            s2.close()
+    except Exception as exc:
+        ok("扫码登录失败保护", False, str(exc))
+
     section("17. 创意灵感：评论 / 我想做 / 视频数据")
     code, c_idea = req("POST", "/ideas", {
         "title": PREFIX + "评论创意",

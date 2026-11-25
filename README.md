@@ -49,6 +49,8 @@ npm run dev
 
 生产部署还需收紧 `main.py` 中的 CORS 配置，并修改默认管理员密码。
 
+**抖音扫码登录是唯一需要图形环境的接口**：后端会拉起有头 Chromium 窗口供扫码，因此部署主机必须同时具备 `backend/collector/douyin_collect.mjs`、`frontend/node_modules`（含 playwright）和已安装的 Chromium，且运行后端进程的用户能打开图形窗口；Linux 无桌面时需配置 Xvfb。依赖缺失时接口会明确报错，**不会创建空账号也不会误标已登录**。
+
 ## 验证
 
 ```bash
@@ -58,7 +60,7 @@ python backend/smoke_test.py
 cd frontend && node smoke_test.cjs
 ```
 
-2026-11-25 交付验证：后端 **259/259**、前端 **124/124**、Vite 构建通过。测试可通过 `AVM_TEST_DB_PATH` 指向临时库，避免污染交付数据。
+2026-11-25 交付验证：后端 **261/261**、前端 **124/124**、Vite 构建通过。测试可通过 `AVM_TEST_DB_PATH` 指向临时库，避免污染交付数据。
 
 ## 文档
 
