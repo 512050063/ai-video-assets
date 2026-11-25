@@ -45,7 +45,7 @@
           </button>
 
           <el-breadcrumb class="adm-header-crumb" separator="/">
-            <el-breadcrumb-item>AI 视频资产管理</el-breadcrumb-item>
+            <el-breadcrumb-item>AI 视频创作管理台</el-breadcrumb-item>
             <el-breadcrumb-item v-if="route.meta.group">{{ route.meta.group }}</el-breadcrumb-item>
             <el-breadcrumb-item>{{ route.meta.title || '首页' }}</el-breadcrumb-item>
           </el-breadcrumb>

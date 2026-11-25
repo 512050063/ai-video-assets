@@ -66,6 +66,7 @@
   --adm-bg-gradient: linear-gradient(135deg, #d7e9ff 0%, #e5efff 46%, #dbf4fb 100%);
   --adm-surface: rgba(255, 255, 255, 0.72);
   --adm-surface-solid: rgba(255, 255, 255, 0.92);
+  --adm-table-fixed-bg: #ffffff;
   --adm-surface-hover: rgba(255, 255, 255, 0.9);
   --adm-sidebar-width: 240px;
   --adm-sidebar-width-collapsed: 68px;
@@ -134,6 +135,7 @@ html.dark {
   --adm-bg-gradient: linear-gradient(135deg, #101d31 0%, #15263c 46%, #142e3a 100%);
   --adm-surface: rgba(28, 36, 50, 0.72);
   --adm-surface-solid: rgba(26, 33, 46, 0.96);
+  --adm-table-fixed-bg: #1a212e;
   --adm-surface-hover: rgba(40, 51, 68, 0.82);
 
   --adm-text-primary: #e4ebf5;
@@ -421,10 +423,32 @@ body {
   font-size: 14px;
 }
 
+/* 固定列：表格背景为 transparent（玻璃风格），窄屏横向滚动时若固定列也透明，
+   底层滚动内容会透出与固定列文字重叠。给固定列补不透明背景隔开。 */
+.el-table th.el-table__cell.el-table-fixed-column--left,
+.el-table th.el-table__cell.el-table-fixed-column--right,
+.el-table td.el-table__cell.el-table-fixed-column--left,
+.el-table td.el-table__cell.el-table-fixed-column--right {
+  background: var(--adm-table-fixed-bg);
+}
+.el-table .el-table__body tr.hover-row > td.el-table__cell.el-table-fixed-column--left,
+.el-table .el-table__body tr.hover-row > td.el-table__cell.el-table-fixed-column--right {
+  background: var(--adm-panel-hover);
+}
+/* 斑马纹行：特异性需高于 Element Plus 的 .el-table--striped ... td.el-table__cell */
+.el-table.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell.el-table-fixed-column--left,
+.el-table.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell.el-table-fixed-column--right {
+  background: var(--adm-table-fixed-bg);
+}
+
 .el-table th.el-table__cell {
   background: var(--adm-panel-soft);
   color: var(--adm-text-regular);
   font-weight: 600;
+}
+.el-table th.el-table__cell.el-table-fixed-column--left,
+.el-table th.el-table__cell.el-table-fixed-column--right {
+  background: var(--adm-table-fixed-bg);
 }
 
 .el-table .el-table__cell {
@@ -822,13 +846,33 @@ html.dark .adm-tag-chip.is-more {
 }
 
 /* 弹窗：玻璃卡片 */
+/* 全局限高：内容区滚动，头部与底部按钮始终留在视口内 */
 .el-dialog {
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
   border-radius: var(--adm-radius-md);
   overflow: hidden;
   background: var(--adm-surface-solid);
   backdrop-filter: blur(24px) saturate(140%);
   -webkit-backdrop-filter: blur(24px) saturate(140%);
   box-shadow: var(--adm-shadow-high);
+}
+.el-dialog__header { flex: 0 0 auto; }
+.el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.el-dialog__footer { flex: 0 0 auto; }
+
+/* 低高度屏幕（≤900px）：覆盖 Element Plus 默认 15vh 上边距，改为顶部对齐，
+   让限高后的弹窗完整落在视口内；大屏保持原生垂直居中不变。 */
+@media (max-height: 900px) {
+  .el-dialog {
+    top: 0;
+    margin: 24px auto !important;
+  }
 }
 
 /* 弹窗头部：图标徽章 + 标题/副标题 */
@@ -1180,6 +1224,18 @@ html.dark .el-checkbox__inner {
     padding: 6px 0;
   }
   .el-table td.el-table__cell .cell { min-height: 46px; }
+  /* 窄屏表格需要横向滚动：Element Plus 会因表格自身宽度等于容器而把 bar 设为
+     display:none（内联样式），这里强制显示，让用户能看到还可以横向滚动。 */
+  .adm-table-wrap .el-scrollbar__bar.is-horizontal {
+    display: block !important;
+    bottom: 0;
+  }
+  .adm-table-wrap .el-scrollbar__bar.is-horizontal .el-scrollbar__thumb {
+    opacity: 0.6;
+    background-color: var(--adm-text-placeholder);
+    min-width: 36px;
+  }
+  .adm-table-wrap .el-scrollbar__bar.is-horizontal .el-scrollbar__thumb:hover { opacity: 0.9; }
   .el-dialog__body { padding: 16px; }
   .el-dialog__footer { padding: 10px 16px 14px; }
   .page-head { min-height: 52px; padding-bottom: 10px; }
