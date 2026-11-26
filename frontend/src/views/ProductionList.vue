@@ -527,7 +527,7 @@ function hasReferenceVideo(row) {
   return !!(row.idea_id || row.douyin_url)
 }
 
-// 新增制作：弹窗不展示封面/作者/创作人，保存时自动生成默认封面、当前登录作者与创作人、开始时间=提交时间
+// 新增创作：弹窗不展示封面/作者/创作人，保存时自动生成默认封面、当前登录作者与创作人、开始时间=提交时间
 function openCreate() {
   Object.assign(create.form, emptyCreateForm())
   create.visible = true

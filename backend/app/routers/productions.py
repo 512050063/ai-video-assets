@@ -317,7 +317,7 @@ def create_production(
         if not data.category_id:
             missing.append("类型")
         if not data.characters:
-            missing.append("使用资产")
+            missing.append("人物模型")
         if not (data.platform or "").strip():
             missing.append("创作平台")
         if not any((p.text or "").strip() for p in data.prompt):
