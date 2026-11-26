@@ -63,7 +63,8 @@ def list_characters(
     if keyword:
         like = f"%{keyword}%"
         q = q.filter(Character.name.like(like))
-    rows = q.order_by(Character.id.desc()).all()
+    # 资产库图片按上传时间倒序，同时间按 id 倒序保持稳定
+    rows = q.order_by(Character.created_at.desc(), Character.id.desc()).all()
     out = []
     for c in rows:
         _ = c.images

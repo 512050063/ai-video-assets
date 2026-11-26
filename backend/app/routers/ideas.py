@@ -232,7 +232,8 @@ def list_ideas(
         )
     if status:
         q = q.filter(Idea.status == status)
-    rows = q.order_by(Idea.id.desc()).all()
+    # 创意列表按提交时间倒序，同时间按 id 倒序保持稳定
+    rows = q.order_by(Idea.created_at.desc(), Idea.id.desc()).all()
     cfg = _vote_config(db)
     used = _votes_today(db, user.id)
     return [_to_detail(i, user, db, vote_cfg=cfg, used_today=used) for i in rows]
@@ -254,12 +255,37 @@ def create_idea(
     return _to_detail(idea, user, db)
 
 
+def _mark_duplicate(result: dict, db: Session, exclude_id: int | None = None) -> dict:
+    """按抖音视频 ID 标记解析结果是否已收集过，供前端在保存前即时提示。
+
+    短链展开失败时 video_id 为空，此时不判重（创建接口仍按可用 ID 兜底判重）。
+    """
+    video_id = (result.get("video_id") or "").strip()
+    result["duplicate_id"] = None
+    result["duplicate_title"] = ""
+    if not video_id:
+        return result
+    q = db.query(Idea).filter(Idea.video_id == video_id)
+    if exclude_id:
+        q = q.filter(Idea.id != exclude_id)
+    dup = q.first()
+    if dup:
+        result["duplicate_id"] = dup.id
+        result["duplicate_title"] = dup.title or "未命名"
+    return result
+
+
 @router.post("/parse", response_model=ParseResultOut)
-def parse_idea(payload: ShareTextIn, user: User = Depends(get_current_user)):
+def parse_idea(
+    payload: ShareTextIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     """解析抖音链接/分享文案，供创意库新建时使用。
 
     解析出链接后自动抓取作者、封面与视频数据；抓取失败时优雅降级，
     仍返回文本解析结果并提示手工补充，不阻塞收集流程。
+    同时按抖音视频 ID 判重，命中时通过 duplicate_id / duplicate_title 返回提示。
     """
     result = parse_share_text(payload.text, expand=True)
     result.setdefault("author_id", "")
@@ -274,6 +300,13 @@ def parse_idea(payload: ShareTextIn, user: User = Depends(get_current_user)):
     result["fetch_status"] = "manual"
 
     target = result.get("url") or ""
+    # 抓不抓取都要先判重：video_id 来自分享文案本身，解析阶段即可确定。
+    # 命中重复时直接返回，跳过耗时的外网抓取，让用户第一时间看到提示。
+    _mark_duplicate(result, db, exclude_id=payload.exclude_id)
+    if result.get("duplicate_id"):
+        result["message"] = "该视频已收集，无需重复抓取视频数据"
+        return result
+
     if not payload.auto_fetch or not target:
         return result
 
@@ -323,6 +356,8 @@ def parse_idea(payload: ShareTextIn, user: User = Depends(get_current_user)):
     else:
         result["message"] = (result.get("message") or "") + "；自动抓取未成功，作者/封面/数据请手动补充"
 
+    # 详情接口可能给出更准的 video_id，覆盖后重新判重
+    _mark_duplicate(result, db, exclude_id=payload.exclude_id)
     return result
 
 

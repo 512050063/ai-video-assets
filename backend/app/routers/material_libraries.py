@@ -152,7 +152,8 @@ def list_materials(
     q = scope_filter(q, Material, user, scope)
     if keyword:
         q = q.filter(Material.name.like(f"%{keyword}%"))
-    rows = q.order_by(Material.id.desc()).all()
+    # 素材图片按上传时间倒序，同时间按 id 倒序保持稳定
+    rows = q.order_by(Material.created_at.desc(), Material.id.desc()).all()
     return [_material_out(db, m, user) for m in rows]
 
 

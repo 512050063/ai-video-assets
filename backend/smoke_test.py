@@ -306,6 +306,12 @@ def run():
             CREATED["ideas"].append(dup_idea["id"])
         if idea.get("video_id"):
             ok("创意按 video_id 去重", code == 400, "code=%s" % code)
+        # 解析结果统一携带判重字段（命中标记在 section 6 用确定的 video_id 验证）
+        code, dup_parse = req("POST", "/ideas/parse", {
+            "text": "https://www.douyin.com/video/999888777666555444", "auto_fetch": False})
+        ok("解析结果含判重字段", code == 200
+           and "duplicate_id" in dup_parse and "duplicate_title" in dup_parse,
+           "duplicate_id=%s" % dup_parse.get("duplicate_id") if isinstance(dup_parse, dict) else dup_parse)
         # 创意点赞投票：一人一票、可取消、票数回退
         code, v1 = req("POST", "/ideas/%s/vote" % idea_id, {})
         ok("创意投票成功", code == 200 and v1.get("votes") == 1 and v1.get("voted") is True,
@@ -473,6 +479,19 @@ def run():
     code, dup_idea = req("POST", "/ideas", {
         "title": PREFIX + "去重创意", "video_id": vid, "author": PREFIX + "作者", "tags": ["测试"]})
     ok("创意按 video_id 去重生效", code == 400 and "已存在" in str(dup_idea.get("detail", "")), "code=%s" % code)
+    # 解析阶段按 video_id 判重：命中已收集视频时返回 duplicate_id / duplicate_title
+    code, dup_parse = req("POST", "/ideas/parse", {
+        "text": "https://www.douyin.com/video/%s" % vid, "auto_fetch": False})
+    ok("解析命中已收集视频返回重复标记", code == 200
+       and dup_parse.get("duplicate_id") == first_idea.get("id")
+       and bool(dup_parse.get("duplicate_title")),
+       "duplicate_id=%s title=%s" % (dup_parse.get("duplicate_id"), dup_parse.get("duplicate_title")))
+    # 编辑场景：解析同一视频并排除自身，不应误判重复
+    code, self_parse = req("POST", "/ideas/parse", {
+        "text": "https://www.douyin.com/video/%s" % vid,
+        "auto_fetch": False, "exclude_id": first_idea.get("id")})
+    ok("解析排除自身不误判重复", code == 200 and self_parse.get("duplicate_id") is None,
+       "duplicate_id=%s" % self_parse.get("duplicate_id") if isinstance(self_parse, dict) else self_parse)
     code, stat_rows = req("GET", "/ideas")
     ok("创意列表提供统计与标签筛选字段", code == 200 and isinstance(stat_rows, list)
        and all(all(k in r for k in ("status", "is_backup", "created_at")) for r in stat_rows),

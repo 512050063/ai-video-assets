@@ -297,7 +297,13 @@ def list_productions(
         q = q.join(ProductionCharacter).filter(ProductionCharacter.character_id == character_id)
 
     total = q.count()
-    rows = q.order_by(Production.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+    # 视频创作列表按排期/开始时间倒序（produced_at），无开始时间的记录排在最后
+    rows = (
+        q.order_by(Production.produced_at.desc().nullslast(), Production.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
     return {"items": [_to_item(p, user) for p in rows], "total": total}
 
 

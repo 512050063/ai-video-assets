@@ -873,6 +873,8 @@ class ShareTextIn(BaseModel):
     text: str = ""
     # 是否在解析链接后自动抓取作者/封面/视频数据（可关闭以加快纯文案解析）
     auto_fetch: bool = True
+    # 编辑创意时重新解析原链接，排除自身避免误判为重复
+    exclude_id: Optional[int] = None
 
 
 class ParseResultOut(BaseModel):
@@ -897,6 +899,9 @@ class ParseResultOut(BaseModel):
     resolved: bool = False
     title_from_text: bool = False
     message: str = ""
+    # 解析时按 video_id 判重：命中时返回已存在创意的 id 与标题，供前端即时提示
+    duplicate_id: Optional[int] = None
+    duplicate_title: str = ""
 
 
 # ---------- 概览 ----------

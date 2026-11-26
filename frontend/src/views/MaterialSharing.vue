@@ -279,6 +279,14 @@
       :loading="confirm.loading"
       @confirm="doRemove"
     />
+
+    <DuplicateImageDialog
+      v-model="dupDialog.visible"
+      :original-name="dupDialog.originalName"
+      :copy-name="dupDialog.copyName"
+      @choose="onDupChoose"
+      @cancel="onDupCancel"
+    />
   </div>
 </template>
 
@@ -289,6 +297,7 @@ import { CircleCheckFilled, Delete, Edit, FolderOpened, Picture, Plus, Search, S
 import PageHeader from '../components/PageHeader.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import DialogHeader from '../components/ui/DialogHeader.vue'
+import DuplicateImageDialog from '../components/ui/DuplicateImageDialog.vue'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 
@@ -317,6 +326,35 @@ const libDialog = reactive({
   form: { name: '', color: '#4a7cc4' }
 })
 const confirm = reactive({ visible: false, loading: false, title: '', message: '', kind: '', id: null })
+
+// 重复图片处理弹窗：按目标素材库内的名称判重，resolve 回传用户选择
+const dupDialog = reactive({ visible: false, originalName: '', copyName: '', resolve: null })
+let dupResolve = null
+
+function askDuplicate(originalName, libraryMaterials) {
+  dupDialog.originalName = originalName
+  dupDialog.copyName = nextCopyName(originalName, libraryMaterials)
+  dupDialog.visible = true
+  return new Promise((resolve) => { dupResolve = resolve })
+}
+
+function onDupChoose(choice) {
+  if (dupResolve) dupResolve(choice)
+  dupResolve = null
+}
+
+function onDupCancel() {
+  if (dupResolve) dupResolve(null)
+  dupResolve = null
+}
+
+function nextCopyName(name, libraryMaterials) {
+  const existing = new Set((libraryMaterials || []).map((m) => m.name))
+  let candidate = `${name}(副本)`
+  let n = 2
+  while (existing.has(candidate)) candidate = `${name}(副本${n++})`
+  return candidate
+}
 const moveDialog = reactive({ visible: false, id: null, name: '', fromLib: null })
 
 const activeLib = computed(() => libraries.value.find((l) => String(l.id) === activeKey.value))
@@ -625,10 +663,29 @@ async function uploadFiles(files, libraryId) {
   if (!valid.length) return
 
   let done = 0
+  // 目标库当前素材，用于库内判重
+  const libMaterials = allMaterials.value.filter((m) => String(m.library_id) === String(targetLib))
   for (const file of valid) {
+    const base = baseName(file.name)
+    // 按名称判重（同一素材库内）：命中则让用户选择改名 / 覆盖 / 创建副本
+    const dup = libMaterials.find((m) => m.name === base)
+    let finalName = base
+    let overwriteId = null
+    if (dup) {
+      const choice = await askDuplicate(base, libMaterials)
+      if (!choice) continue // 取消：跳过该文件
+      if (choice.action === 'overwrite') {
+        overwriteId = dup.id
+      } else if (choice.action === 'rename') {
+        finalName = choice.name
+      } else if (choice.action === 'copy') {
+        finalName = dupDialog.copyName
+      }
+    }
+
     const task = {
       id: `${Date.now()}-${Math.random()}`,
-      name: baseName(file.name),
+      name: finalName,
       percent: 0,
       status: '',
       preview: URL.createObjectURL(file)
@@ -643,18 +700,30 @@ async function uploadFiles(files, libraryId) {
         }
       })
       task.percent = 99
-      await api.post(`/material-libraries/${targetLib}/materials`, {
-        name: task.name,
+      const payload = {
+        name: finalName,
         description: '',
         tags: [],
         images: [{ file_path: data.url, sort: 0 }]
-      })
+      }
+      if (overwriteId) {
+        // 覆盖：保留原素材的描述与标签，只替换图片，名称不变
+        const origin = libMaterials.find((m) => m.id === overwriteId)
+        payload.name = base
+        payload.description = origin?.description || ''
+        payload.tags = origin?.tags || []
+        await api.put(`/material-libraries/materials/${overwriteId}`, payload)
+      } else {
+        await api.post(`/material-libraries/${targetLib}/materials`, payload)
+      }
       task.percent = 100
       task.status = 'success'
       done += 1
-      ElMessage.success(`${task.name} 上传成功`)
+      ElMessage.success(`${task.name} ${overwriteId ? '已覆盖' : '上传成功'}`)
       activeKey.value = String(targetLib)
       await reloadAll()
+      // 同步本地判重集合：新建的素材加入，覆盖的保持原名
+      if (!overwriteId) libMaterials.push({ id: -1, name: finalName, library_id: Number(targetLib) })
       await new Promise((resolve) => setTimeout(resolve, 900))
     } catch (e) {
       task.status = 'error'

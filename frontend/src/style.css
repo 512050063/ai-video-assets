@@ -202,7 +202,9 @@ html.dark {
 html,
 body,
 #app {
-  height: 100%;
+  /* 用 min-height 而非 height：内容超出一屏时容器随内容增高，
+     配合 fixed 背景才能铺满整个滚动文档，避免滚动后露出背景底边横线 */
+  min-height: 100%;
   margin: 0;
 }
 

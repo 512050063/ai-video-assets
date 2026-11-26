@@ -290,7 +290,14 @@ def summary(
         }
         rows.append(item)
 
-    rows.sort(key=lambda x: x.get("published_at") or datetime.min, reverse=True)
+    # 发布数据列表按发布时间倒序；时间相同或缺失时按导入/创作 id 倒序保持稳定
+    rows.sort(
+        key=lambda x: (
+            x.get("published_at") or datetime.min,
+            x.get("import_id") or x.get("production_id") or 0,
+        ),
+        reverse=True,
+    )
 
     # 账号分组：以「我的账号」中已添加的账号为准，未发过视频的账号也要显示（作品数量取账号资料）
     aq = db.query(PublishAccount)

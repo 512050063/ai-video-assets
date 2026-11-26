@@ -176,6 +176,14 @@
       :loading="confirm.loading"
       @confirm="doRemove"
     />
+
+    <DuplicateImageDialog
+      v-model="dupDialog.visible"
+      :original-name="dupDialog.originalName"
+      :copy-name="dupDialog.copyName"
+      @choose="onDupChoose"
+      @cancel="onDupCancel"
+    />
   </div>
 </template>
 
@@ -185,6 +193,7 @@ import { ElMessage } from 'element-plus'
 import { CircleCheckFilled, Delete, Edit, Picture, Search, UploadFilled, User, WarningFilled } from '@element-plus/icons-vue'
 import PageHeader from '../components/PageHeader.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
+import DuplicateImageDialog from '../components/ui/DuplicateImageDialog.vue'
 import { api } from '../api'
 import { useAuthStore } from '../stores/auth'
 
@@ -205,6 +214,35 @@ const editingId = ref(null)
 const editingForm = reactive({ name: '', description: '' })
 
 const confirm = reactive({ visible: false, loading: false, message: '', id: null })
+// 重复图片处理弹窗：resolve 用于把用户选择回传给 async 上传流程
+const dupDialog = reactive({ visible: false, originalName: '', copyName: '', resolve: null })
+let dupResolve = null
+
+function askDuplicate(originalName) {
+  dupDialog.originalName = originalName
+  dupDialog.copyName = nextCopyName(originalName)
+  dupDialog.visible = true
+  return new Promise((resolve) => { dupResolve = resolve })
+}
+
+function onDupChoose(choice) {
+  if (dupResolve) dupResolve(choice)
+  dupResolve = null
+}
+
+function onDupCancel() {
+  if (dupResolve) dupResolve(null)
+  dupResolve = null
+}
+
+// 生成不冲突的副本名：原名(副本)、原名(副本2)...
+function nextCopyName(name) {
+  const existing = new Set(list.value.map((c) => c.name))
+  let candidate = `${name}(副本)`
+  let n = 2
+  while (existing.has(candidate)) candidate = `${name}(副本${n++})`
+  return candidate
+}
 
 async function load() {
   loading.value = true
@@ -330,9 +368,26 @@ async function uploadFiles(files) {
 
   let done = 0
   for (const file of valid) {
+    const base = baseName(file.name)
+    // 按名称判重：命中同名资产时弹窗让用户选择改名 / 覆盖 / 创建副本
+    const dup = list.value.find((c) => c.name === base)
+    let finalName = base
+    let overwriteId = null
+    if (dup) {
+      const choice = await askDuplicate(base)
+      if (!choice) continue // 取消：跳过该文件
+      if (choice.action === 'overwrite') {
+        overwriteId = dup.id
+      } else if (choice.action === 'rename') {
+        finalName = choice.name
+      } else if (choice.action === 'copy') {
+        finalName = dupDialog.copyName
+      }
+    }
+
     const task = {
       id: `${Date.now()}-${Math.random()}`,
-      name: baseName(file.name),
+      name: finalName,
       percent: 0,
       status: '',
       preview: URL.createObjectURL(file)
@@ -347,17 +402,26 @@ async function uploadFiles(files) {
         }
       })
       task.percent = 99
-      await api.post('/characters', {
-        name: task.name,
+      const payload = {
+        name: finalName,
         asset_type: 'character',
         description: '',
         tags: [],
         images: [{ file_path: data.url, sort: 0 }]
-      })
+      }
+      if (overwriteId) {
+        // 覆盖：借用原资产的描述/标签，只替换图片与名称保持同名
+        const origin = list.value.find((c) => c.id === overwriteId)
+        payload.description = origin?.description || ''
+        payload.tags = origin?.tags || []
+        await api.put(`/characters/${overwriteId}`, payload)
+      } else {
+        await api.post('/characters', payload)
+      }
       task.percent = 100
       task.status = 'success'
       done += 1
-      ElMessage.success(`${task.name} 上传成功`)
+      ElMessage.success(`${task.name} ${overwriteId ? '已覆盖' : '上传成功'}`)
       await load()
       await new Promise((resolve) => setTimeout(resolve, 900))
     } catch (e) {

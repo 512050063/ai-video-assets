@@ -282,6 +282,9 @@
             </template>
             <template v-else>已保留原始短链，抖音未开放标题接口，请手动补充名称</template>
           </div>
+          <div v-if="dialog.duplicate" class="parse-duplicate-tip">
+            该视频已收集过：{{ dialog.duplicate.title }}。请勿重复提交，可直接到列表中查看。
+          </div>
         </el-form-item>
         <el-form-item label="视频名称" prop="title">
           <el-input v-model="dialog.form.title" placeholder="解析后自动填充，可手动修改" />
@@ -589,7 +592,7 @@ const pagedList = computed(() => {
 
 watch([keyword, usage], () => { page.value = 1 })
 
-const dialog = reactive({ visible: false, isEdit: false, id: null, saving: false, submitted: false, form: emptyForm() })
+const dialog = reactive({ visible: false, isEdit: false, id: null, saving: false, submitted: false, form: emptyForm(), duplicate: null })
 const formRef = ref(null)
 // 视频名称 / 话题标签允许为空，保存时自动补默认值；视频数据四项合并成一个校验点
 // 规则始终挂载以显示必填星号；trigger 设为不存在的事件，
@@ -825,6 +828,7 @@ function openCreate() {
   dialog.isEdit = false
   dialog.id = null
   dialog.submitted = false
+  dialog.duplicate = null
   dialog.form = emptyForm()
   dialog.visible = true
   loadCreators()
@@ -835,6 +839,7 @@ function openEdit(row) {
   dialog.isEdit = true
   dialog.id = row.id
   dialog.submitted = false
+  dialog.duplicate = null
   dialog.form = {
     title: row.title, cover: row.cover || '', category_id: row.category_id || null,
     douyin_url: row.douyin_url, video_id: row.video_id || '',
@@ -904,7 +909,13 @@ async function doParse() {
   if (!text) return ElMessage.warning('请先粘贴抖音链接或分享文案')
   parsing.value = true
   try {
-    const { data } = await api.post('/ideas/parse', { text, auto_fetch: true })
+    const { data } = await api.post('/ideas/parse', {
+      text, auto_fetch: true, exclude_id: dialog.isEdit ? dialog.id : null
+    })
+    // 解析阶段即按视频 ID 判重，命中后在表单给出醒目提示，保存时还会再次拦截
+    dialog.duplicate = data.duplicate_id
+      ? { id: data.duplicate_id, title: data.duplicate_title || '未命名创意' }
+      : null
     dialog.form.title = data.title || dialog.form.title
     dialog.form.douyin_url = data.url || dialog.form.douyin_url
     dialog.form.video_id = data.video_id || ''
@@ -920,7 +931,9 @@ async function doParse() {
     if (data.share_count) dialog.form.share_count = data.share_count
     if (data.duration != null) dialog.form.duration = data.duration
     if (data.published_at) dialog.form.published_at = formatDate(data.published_at)
-    if (data.fetch_status === 'auto') {
+    if (dialog.duplicate) {
+      ElMessage.warning(`该视频已收集过「${dialog.duplicate.title}」，请勿重复提交`)
+    } else if (data.fetch_status === 'auto') {
       ElMessage.success('解析成功，已自动获取作者、封面、发布时间、时长与视频数据，可手动调整')
     } else if (data.title_from_text) {
       ElMessage.success('解析成功，已生成名称并保留原始短链')
@@ -942,6 +955,10 @@ async function save() {
     await formRef.value?.validate()
   } catch (_) {
     return ElMessage.warning('请补全必填项后再保存')
+  }
+  // 解析阶段已判重，保存时再拦截一次（防止用户忽略提示后仍提交）
+  if (dialog.duplicate) {
+    return ElMessage.warning(`该视频已收集过「${dialog.duplicate.title}」，请勿重复提交`)
   }
   // 视频名称 / 话题标签可空：保存前按作者名补齐默认值
   const author = String(dialog.form.author || '').trim().replace(/^@/, '')
@@ -1235,23 +1252,21 @@ watch(() => route.query.keyword, (kw) => {
   gap: 8px;
   width: 100%;
 }
-/* 已排期态做成按钮：制作中可点取消排期 */
+/* 已排期态做成按钮：制作中可点取消排期（无背景无边框，仅 hover 变色提示可点） */
 .arrange-cell--btn {
   padding: 4px 6px;
-  border: 1px solid transparent;
+  border: 0;
   border-radius: 9px;
   background: transparent;
   cursor: default;
 }
 .arrange-cell--btn.is-cancellable {
   cursor: pointer;
-  border-color: var(--adm-border);
-  background: var(--adm-surface-sunken, #f5f7fa);
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
 }
-.arrange-cell--btn.is-cancellable:hover {
-  border-color: var(--el-color-warning);
-  background: var(--adm-amber-bg, #fdf6ec);
+.arrange-cell--btn.is-cancellable:hover .arrange-creator-tag,
+.arrange-cell--btn.is-cancellable:hover .arrange-date {
+  color: var(--el-color-warning);
 }
 /* 待发布 / 已完成：只读，制作人 + 完成时间居中，无优先级 */
 .arrange-cell--done {
@@ -1345,7 +1360,7 @@ watch(() => route.query.keyword, (kw) => {
 }
 .comment-count { font-variant-numeric: tabular-nums; }
 
-/* 点赞投票胶囊按钮（心形图标） */
+/* 点赞投票按钮（心形图标）：无背景无边框，仅已点赞时着色 */
 .vote-btn {
   display: inline-flex;
   align-items: center;
@@ -1353,25 +1368,21 @@ watch(() => route.query.keyword, (kw) => {
   gap: 4px;
   min-width: 52px;
   height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--adm-border);
-  border-radius: 9px;
-  background: var(--adm-surface-sunken);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--adm-text-secondary);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
 }
 .vote-btn:hover:not(:disabled) {
-  border-color: #e8474f;
   color: #e8474f;
-  background: rgba(232, 71, 79, 0.08);
 }
 .vote-btn.is-voted {
-  border-color: #e8474f;
   color: #e8474f;
-  background: rgba(232, 71, 79, 0.08);
 }
 .vote-btn:disabled { cursor: default; opacity: 0.65; }
 .vote-btn.is-exhausted { opacity: 0.45; }
@@ -1512,6 +1523,7 @@ watch(() => route.query.keyword, (kw) => {
 
 .parse-tip { margin-top: 6px; font-size: 12px; line-height: 1.5; color: var(--adm-text-secondary); padding: 6px 10px; border-radius: 10px; background: rgba(64, 158, 255, 0.08); }
 .parse-tip.is-warn { color: var(--adm-state-warning-fg); background: var(--adm-state-warning-bg); }
+.parse-duplicate-tip { margin-top: 6px; font-size: 12px; line-height: 1.5; color: #c45656; padding: 6px 10px; border-radius: 10px; background: rgba(245, 108, 108, 0.12); border: 1px solid rgba(245, 108, 108, 0.3); }
 
 .cover-edit { display: flex; align-items: center; gap: 12px; }
 .cover-tip { font-size: 12px; color: var(--adm-text-placeholder); line-height: 1.5; }
