@@ -259,8 +259,8 @@ def run_migrations():
         _add_column(conn, "ideas", "voter_ids", "JSON DEFAULT '[]'")
         # 创意「我想做」认领标记：认领用户 ID 列表（JSON），仅标记不进排期
         _add_column(conn, "ideas", "want_ids", "JSON DEFAULT '[]'")
-        # 创意视频数据：喜欢 / 评论 / 收藏 / 转发
-        for col in ("like_count", "comment_count", "collect_count", "share_count"):
+        # 创意视频数据：播放 / 喜欢 / 评论 / 收藏 / 转发
+        for col in ("play_count", "like_count", "comment_count", "collect_count", "share_count"):
             _add_column(conn, "ideas", col, "INTEGER DEFAULT 0")
             try:
                 conn.exec_driver_sql(
@@ -268,6 +268,9 @@ def run_migrations():
                 )
             except Exception:
                 pass
+        # 创意视频时长（秒）与发布时间：解析抖音链接时自动回填
+        _add_column(conn, "ideas", "duration", "FLOAT")
+        _add_column(conn, "ideas", "published_at", "DATETIME")
         _add_column(conn, "productions", "cover", "VARCHAR(500) DEFAULT ''")
         # 制作记录作者：手动新建时写入当前登录者；历史数据由来源计划 / 创意回填
         _add_column(conn, "productions", "author", "VARCHAR(100) DEFAULT ''")

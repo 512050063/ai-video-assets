@@ -77,6 +77,18 @@
                 />
                 <span v-else class="adm-cell-empty">—</span>
               </div>
+              <!-- 视频元信息：发布时间 + 时长（解析链接时自动回填） -->
+              <div class="idea-video-meta">
+                <span class="idea-meta-item" :title="row.published_at ? '发布时间：' + formatDateTime(row.published_at) : '未获取发布时间'">
+                  <el-icon :size="11"><Calendar /></el-icon>
+                  {{ row.published_at ? formatDate(row.published_at) : '—' }}
+                </span>
+                <span class="idea-meta-sep">·</span>
+                <span class="idea-meta-item" :title="row.duration ? '视频时长：' + formatDuration(row.duration) : '未获取时长'">
+                  <el-icon :size="11"><Timer /></el-icon>
+                  {{ row.duration ? formatDuration(row.duration) : '—' }}
+                </span>
+              </div>
             </template>
           </el-table-column>
 
@@ -87,10 +99,14 @@
             </template>
           </el-table-column>
 
-          <!-- 视频数据：喜欢 / 评论 / 收藏 / 转发（两行两列） -->
-          <el-table-column label="视频数据" min-width="148" align="center">
+          <!-- 视频数据：播放 / 喜欢 / 评论 / 收藏 / 转发（三行两列 / 播放独占一行） -->
+          <el-table-column label="视频数据" min-width="150" align="center">
             <template #default="{ row }">
               <div class="video-stat">
+                <span class="video-stat-item is-play" title="播放量">
+                  <span class="video-stat-ico"><SocialIcon name="play" :size="11" /></span>
+                  <span class="video-stat-num">{{ formatCount(row.play_count) }}</span>
+                </span>
                 <span class="video-stat-item is-like" title="喜欢数">
                   <span class="video-stat-ico"><SocialIcon name="heart" :size="11" /></span>
                   <span class="video-stat-num">{{ formatCount(row.like_count) }}</span>
@@ -297,8 +313,31 @@
         <el-form-item label="话题标签" prop="tags">
           <TagSelect v-model="dialog.form.tags" placeholder="从话题标签库选择，或输入新话题标签回车创建" />
         </el-form-item>
+        <el-form-item label="视频信息">
+          <div class="video-data-edit is-meta">
+            <div class="video-data-field">
+              <label><el-icon><Calendar /></el-icon> 发布时间</label>
+              <el-date-picker
+                v-model="dialog.form.published_at"
+                type="date"
+                value-format="YYYY-MM-DD"
+                placeholder="选择日期"
+                size="small"
+                style="width: 100%"
+              />
+            </div>
+            <div class="video-data-field">
+              <label><el-icon><Timer /></el-icon> 时长（秒）</label>
+              <el-input-number v-model="dialog.form.duration" :min="0" :max="86400" :precision="1" controls-position="right" size="small" />
+            </div>
+          </div>
+        </el-form-item>
         <el-form-item label="视频数据" prop="like_count" required>
           <div class="video-data-edit">
+            <div class="video-data-field">
+              <label class="is-play"><SocialIcon name="play" :size="12" /> 播放</label>
+              <el-input-number v-model="dialog.form.play_count" :min="0" :max="99999999" controls-position="right" size="small" />
+            </div>
             <div class="video-data-field">
               <label class="is-like"><SocialIcon name="heart" :size="12" /> 喜欢</label>
               <el-input-number v-model="dialog.form.like_count" :min="0" :max="99999999" controls-position="right" size="small" />
@@ -415,11 +454,12 @@
         <el-form-item label="制作时间">
           <el-date-picker
             v-model="plan.form.planned_at"
-            type="datetime"
-            value-format="YYYY-MM-DDTHH:mm:ss"
-            placeholder="请选择制作时间"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="请选择制作日期"
             style="width: 100%"
           />
+          <div class="form-tip">默认今日；到制作日期后自动进入「制作中」并生成制作记录</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -598,14 +638,21 @@ const cancelPlanState = reactive({ visible: false, loading: false, row: null })
 const creatorOptions = ref([])
 
 function emptyPlanForm() {
-  return { priority: 2, creator_id: null, planned_at: null }
+  // 制作时间默认今日；当前账户为「创作」角色时制作人默认填自己
+  const isProductionRole = auth.user?.module_role === 'production'
+  return {
+    priority: 2,
+    creator_id: isProductionRole ? (auth.user?.id ?? null) : null,
+    planned_at: todayDate()
+  }
 }
 
 function emptyForm() {
   return {
     title: '', cover: '', category_id: null, douyin_url: '', video_id: '',
     share_text: '', author: '', tags: [], remark: '', title_from_text: false,
-    like_count: 0, comment_count: 0, collect_count: 0, share_count: 0,
+    play_count: 0, like_count: 0, comment_count: 0, collect_count: 0, share_count: 0,
+    duration: null, published_at: null,
     creator_id: null, priority: 2, planned_at: null
   }
 }
@@ -617,6 +664,24 @@ function formatCount(n) {
   if (v >= 10000) return (v / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
   if (v >= 1000) return (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
   return String(v)
+}
+
+// 视频时长（秒）→ mm:ss / h:mm:ss
+function formatDuration(seconds) {
+  const total = Math.round(Number(seconds || 0))
+  if (total <= 0) return '—'
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  const pad = (n) => String(n).padStart(2, '0')
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
+}
+
+// 今日日期（YYYY-MM-DD，本地时区），用于创作计划默认制作时间
+function todayDate() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
 }
 
 async function load() {
@@ -728,7 +793,12 @@ async function savePlan() {
   if (!plan.row) return
   plan.saving = true
   try {
-    const { data } = await api.put(`/ideas/${plan.row.id}/arrange`, { ...plan.form })
+    // 制作时间只选日期：归一到当天末尾，避免默认今日时刚排期就被到期任务立即流转到「制作中」
+    const payload = {
+      ...plan.form,
+      planned_at: plan.form.planned_at ? `${plan.form.planned_at}T23:59:59` : null
+    }
+    const { data } = await api.put(`/ideas/${plan.row.id}/arrange`, payload)
     ElMessage.success(`已排期，状态更新为「${data.status}」`)
     plan.visible = false
     await load()
@@ -790,8 +860,11 @@ function openEdit(row) {
     douyin_url: row.douyin_url, video_id: row.video_id || '',
     share_text: row.share_text, author: row.author, tags: [...(row.tags || [])],
     remark: row.remark, title_from_text: true,
-    like_count: row.like_count || 0, comment_count: row.comment_count || 0,
-    collect_count: row.collect_count || 0, share_count: row.share_count || 0,
+    play_count: row.play_count || 0, like_count: row.like_count || 0,
+    comment_count: row.comment_count || 0, collect_count: row.collect_count || 0,
+    share_count: row.share_count || 0,
+    duration: row.duration != null ? row.duration : null,
+    published_at: row.published_at ? formatDate(row.published_at) : null,
     creator_id: row.creator_id || null, priority: row.priority || 2,
     planned_at: row.planned_at ? formatDate(row.planned_at) + 'T00:00:00' : null
   }
@@ -861,12 +934,15 @@ async function doParse() {
     // 自动抓取回填：作者 / 封面 / 视频数据
     if (data.author) dialog.form.author = data.author
     if (data.cover) dialog.form.cover = data.cover
+    if (data.play_count) dialog.form.play_count = data.play_count
     if (data.like_count) dialog.form.like_count = data.like_count
     if (data.comment_count) dialog.form.comment_count = data.comment_count
     if (data.collect_count) dialog.form.collect_count = data.collect_count
     if (data.share_count) dialog.form.share_count = data.share_count
+    if (data.duration != null) dialog.form.duration = data.duration
+    if (data.published_at) dialog.form.published_at = formatDate(data.published_at)
     if (data.fetch_status === 'auto') {
-      ElMessage.success('解析成功，已自动获取作者、封面与视频数据，可手动调整')
+      ElMessage.success('解析成功，已自动获取作者、封面、播放量、发布时间、时长与视频数据，可手动调整')
     } else if (data.title_from_text) {
       ElMessage.success('解析成功，已生成名称并保留原始短链')
     } else {
@@ -961,6 +1037,23 @@ watch(() => route.query.keyword, (kw) => {
   transform: scale(0.92);
   transform-origin: left center;
 }
+/* 视频名称第三行：发布时间 + 时长（解析回填，小字） */
+.idea-video-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--adm-text-placeholder, #a8abb2);
+}
+.idea-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  white-space: nowrap;
+}
+.idea-meta-sep { opacity: 0.6; }
 
 /* 创意获取：上提交人标签、下提交时间（两者同宽、日期小字） */
 .idea-owner-cell {
@@ -1009,7 +1102,7 @@ watch(() => route.query.keyword, (kw) => {
   width: 100%;
 }
 
-/* 视频数据列：两行两列，每项为「图标 + 数字」，无背景块 */
+/* 视频数据列：播放独占首行，其余两行两列，每项为「图标 + 数字」 */
 .video-stat {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1018,6 +1111,10 @@ watch(() => route.query.keyword, (kw) => {
   gap: 5px 8px;
   width: 100%;
   font-variant-numeric: tabular-nums;
+}
+.video-stat-item.is-play {
+  grid-column: 1 / -1;
+  justify-self: center;
 }
 .video-stat-item {
   display: inline-flex;
@@ -1036,7 +1133,8 @@ watch(() => route.query.keyword, (kw) => {
   font-weight: 600;
   color: var(--adm-text-regular, #303133);
 }
-/* 四项各自主题色：喜欢红 / 评论蓝 / 收藏橙 / 转发青 */
+/* 五项各自主题色：播放紫 / 喜欢红 / 评论蓝 / 收藏橙 / 转发青 */
+.video-stat-item.is-play .video-stat-ico { color: var(--el-color-primary, #4a7cc4); }
 .video-stat-item.is-like .video-stat-ico { color: #e8474f; }
 .video-stat-item.is-comment .video-stat-ico { color: #4a7cc4; }
 .video-stat-item.is-collect .video-stat-ico { color: #e6932c; }
@@ -1308,9 +1406,12 @@ watch(() => route.query.keyword, (kw) => {
 }
 .video-data-edit {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
   width: 100%;
+}
+.video-data-edit.is-meta {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .video-data-field {
   display: flex;
@@ -1328,8 +1429,14 @@ watch(() => route.query.keyword, (kw) => {
 .video-data-field > label .dy-icon {
   color: var(--el-color-primary);
 }
+.video-data-field > label.is-play .dy-icon {
+  color: var(--el-color-primary);
+}
 .video-data-field > label.is-like .dy-icon {
   color: #e8474f;
+}
+.video-data-field > label .el-icon {
+  color: var(--adm-text-secondary);
 }
 .video-data-field :deep(.el-input-number) {
   width: 100%;

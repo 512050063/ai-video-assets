@@ -301,11 +301,15 @@ class Idea(Base):
     want_ids = Column(JSON, default=list)
     # 创作人：负责制作视频的人（与 owner_id 提交人区分）
     creator_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    # 视频数据（抖音侧抓取或手工录入）：喜欢 / 评论 / 收藏 / 转发
+    # 视频数据（抖音侧抓取或手工录入）：播放 / 喜欢 / 评论 / 收藏 / 转发
+    play_count = Column(Integer, default=0)
     like_count = Column(Integer, default=0)
     comment_count = Column(Integer, default=0)
     collect_count = Column(Integer, default=0)
     share_count = Column(Integer, default=0)
+    # 视频时长（秒）与发布时间（抖音侧抓取或手工录入）
+    duration = Column(Float, nullable=True)
+    published_at = Column(DateTime, nullable=True)
     # 全流程权威状态：未使用 / 已排期 / 制作中 / 待发布 / 已完成
     status = Column(String(20), default="未使用", index=True)
     # 备选标记：与流程状态独立，点亮表示标记为备选（状态列前的星标）

@@ -199,6 +199,10 @@ def run():
     ok("分享文案解析", code == 200 and "测试用视频标题" in parsed.get("title", "")
        and "测试话题" in parsed.get("tags", []),
        "title=%s tags=%s author=%s" % (parsed.get("title"), parsed.get("tags"), parsed.get("author")))
+    ok("解析结果含播放/时长/发布时间字段", code == 200
+       and "play_count" in parsed and "duration" in parsed and "published_at" in parsed,
+       "play_count=%s duration=%s published_at=%s" % (
+           parsed.get("play_count"), parsed.get("duration"), parsed.get("published_at")))
 
     # 回归：抖音短链码含连字符/下划线时不能被正则截断
     hyphen_share = "#话题A https://v.douyin.com/edWBkm-meAI/ 复制此链接打开抖音"
@@ -1115,17 +1119,24 @@ def run():
     code, c_idea = req("POST", "/ideas", {
         "title": PREFIX + "评论创意",
         "author": "测试作者",
-        "like_count": 1200, "comment_count": 34, "collect_count": 56, "share_count": 7,
+        "play_count": 98765, "like_count": 1200, "comment_count": 34,
+        "collect_count": 56, "share_count": 7,
+        "duration": 63.5, "published_at": "2026-11-20T10:30:00",
     })
     ok("创建带视频数据的创意", code == 200 and c_idea.get("like_count") == 1200
        and c_idea.get("comment_count") == 34 and c_idea.get("collect_count") == 56
-       and c_idea.get("share_count") == 7, c_idea if isinstance(c_idea, dict) else c_idea)
+       and c_idea.get("share_count") == 7 and c_idea.get("play_count") == 98765
+       and c_idea.get("duration") == 63.5 and bool(c_idea.get("published_at")),
+       c_idea if isinstance(c_idea, dict) else c_idea)
     c_idea_id = c_idea.get("id") if isinstance(c_idea, dict) else None
     if c_idea_id:
         CREATED["ideas"].append(c_idea_id)
         code, c_list = req("GET", "/ideas/%s" % c_idea_id)
         ok("创意详情回显视频数据", code == 200 and c_list.get("like_count") == 1200
-           and c_list.get("share_count") == 7, c_list.get("like_count") if isinstance(c_list, dict) else c_list)
+           and c_list.get("share_count") == 7 and c_list.get("play_count") == 98765
+           and c_list.get("duration") == 63.5 and bool(c_list.get("published_at")),
+           {k: c_list.get(k) for k in ("play_count", "duration", "published_at")}
+           if isinstance(c_list, dict) else c_list)
 
         # 我想做：认领标记，可切换，不改变流程状态
         code, w1 = req("POST", "/ideas/%s/want" % c_idea_id)

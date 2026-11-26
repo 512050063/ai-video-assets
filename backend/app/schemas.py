@@ -489,11 +489,14 @@ class IdeaIn(BaseModel):
     author: str = ""
     tags: List[str] = []
     remark: str = ""
-    # 视频数据：喜欢 / 评论 / 收藏 / 转发
+    # 视频数据：播放 / 喜欢 / 评论 / 收藏 / 转发，以及时长（秒）/ 发布时间
+    play_count: int = 0
     like_count: int = 0
     comment_count: int = 0
     collect_count: int = 0
     share_count: int = 0
+    duration: Optional[float] = None
+    published_at: Optional[datetime] = None
     # 创作安排：创作人（负责制作）、优先级（1 高 / 2 中 / 3 低）与排期日期
     creator_id: Optional[int] = None
     priority: int = 2
@@ -542,10 +545,13 @@ class IdeaOut(BaseModel):
     tags: List[str]
     status: str
     remark: str
+    play_count: int = 0
     like_count: int = 0
     comment_count: int = 0
     collect_count: int = 0
     share_count: int = 0
+    duration: Optional[float] = None
+    published_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -870,10 +876,13 @@ class ParseResultOut(BaseModel):
     author_id: str = ""
     cover: str = ""
     tags: List[str] = []
+    play_count: int = 0
     like_count: int = 0
     comment_count: int = 0
     collect_count: int = 0
     share_count: int = 0
+    duration: Optional[float] = None
+    published_at: Optional[datetime] = None
     # auto = 自动抓取成功；manual = 需手工填写（未抓取或失败）
     fetch_status: str = ""
     raw: str = ""

@@ -90,10 +90,13 @@ def _to_detail(
         status=idea.status or "未使用",
         is_backup=bool(idea.is_backup),
         remark=idea.remark or "",
+        play_count=idea.play_count or 0,
         like_count=idea.like_count or 0,
         comment_count=idea.comment_count or 0,
         collect_count=idea.collect_count or 0,
         share_count=idea.share_count or 0,
+        duration=idea.duration,
+        published_at=idea.published_at,
         priority=idea.priority or 2,
         planned_at=idea.planned_at,
         created_at=idea.created_at,
@@ -165,16 +168,20 @@ def _apply_in(db: Session, idea: Idea, data: IdeaIn):
     old_tags = list(idea.tags or [])
     for field in (
         "title", "cover", "category_id", "douyin_url", "share_text", "author", "remark",
-        "like_count", "comment_count", "collect_count", "share_count", "priority", "planned_at",
+        "play_count", "like_count", "comment_count", "collect_count", "share_count",
+        "duration", "published_at", "priority", "planned_at",
         "creator_id", "is_backup",
     ):
         if field in provided:
             setattr(idea, field, getattr(data, field))
     # 视频数据不允许负数（新对象入库前默认值为 None，这里统一兜底为 0）
-    for field in ("like_count", "comment_count", "collect_count", "share_count"):
+    for field in ("play_count", "like_count", "comment_count", "collect_count", "share_count"):
         value = getattr(idea, field, None)
         if value is None or value < 0:
             setattr(idea, field, 0)
+    # 时长为负或无意义时清空
+    if getattr(idea, "duration", None) is not None and idea.duration < 0:
+        idea.duration = None
     if "tags" in provided:
         idea.tags = list(data.tags or [])
     idea.video_id = video_id
@@ -257,10 +264,13 @@ def parse_idea(payload: ShareTextIn, user: User = Depends(get_current_user)):
     result = parse_share_text(payload.text, expand=True)
     result.setdefault("author_id", "")
     result.setdefault("cover", "")
+    result.setdefault("play_count", 0)
     result.setdefault("like_count", 0)
     result.setdefault("comment_count", 0)
     result.setdefault("collect_count", 0)
     result.setdefault("share_count", 0)
+    result.setdefault("duration", None)
+    result.setdefault("published_at", None)
     result["fetch_status"] = "manual"
 
     target = result.get("url") or ""
@@ -288,12 +298,28 @@ def parse_idea(payload: ShareTextIn, user: User = Depends(get_current_user)):
             result["cover"] = fetched["cover"]
         if fetched.get("video_id"):
             result["video_id"] = fetched["video_id"]
+        result["play_count"] = int(fetched.get("plays") or 0)
         result["like_count"] = int(fetched.get("likes") or 0)
         result["comment_count"] = int(fetched.get("comments") or 0)
         result["collect_count"] = int(fetched.get("collects") or 0)
         result["share_count"] = int(fetched.get("shares") or 0)
+        # 时长：采集器已换算为秒
+        duration = fetched.get("duration")
+        if duration is not None:
+            try:
+                duration = float(duration)
+                result["duration"] = duration if duration > 0 else None
+            except (TypeError, ValueError):
+                result["duration"] = None
+        # 发布时间：抖音 create_time 为秒级 Unix 时间戳
+        create_time = fetched.get("create_time")
+        if create_time:
+            try:
+                result["published_at"] = datetime.fromtimestamp(int(create_time))
+            except (TypeError, ValueError, OSError, OverflowError):
+                result["published_at"] = None
         result["fetch_status"] = "auto"
-        result["message"] = "已自动获取作者、封面与视频数据，可手动调整"
+        result["message"] = "已自动获取作者、封面、播放量、发布时间、时长与视频数据，可手动调整"
     else:
         result["message"] = (result.get("message") or "") + "；自动抓取未成功，作者/封面/数据请手动补充"
 

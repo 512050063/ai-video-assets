@@ -183,6 +183,11 @@ function normalizeAweme(a) {
     shares: parseCount(stat.share_count ?? stat.shareCount),
     collects: parseCount(stat.collect_count ?? stat.collectCount),
     create_time: a.create_time || 0,
+    // 时长：抖音详情以毫秒给出（video.duration / duration），统一换算成秒
+    duration: (() => {
+      const ms = Number((a.video && a.video.duration) || a.duration || 0) || 0
+      return ms > 0 ? Math.round((ms / 1000) * 10) / 10 : 0
+    })(),
   }
 }
 
