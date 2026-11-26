@@ -77,11 +77,16 @@
                 />
                 <span v-else class="adm-cell-empty">—</span>
               </div>
-              <!-- 视频元信息：第三行只显示发布时间（时长已移至「视频数据」列首行） -->
+              <!-- 视频元信息：第三行显示发布时间 + 时长（解析回填，小字） -->
               <div class="idea-video-meta">
                 <span class="idea-meta-item" :title="row.published_at ? '发布时间：' + formatDateTime(row.published_at) : '未获取发布时间'">
                   <el-icon :size="11"><Calendar /></el-icon>
                   {{ row.published_at ? formatDate(row.published_at) : '—' }}
+                </span>
+                <span class="idea-meta-sep">·</span>
+                <span class="idea-meta-item" :title="row.duration != null ? '视频时长：' + Number(row.duration).toFixed(1) + 'S' : '未获取时长'">
+                  <SocialIcon name="duration" :size="11" />
+                  {{ row.duration != null ? Number(row.duration).toFixed(1) + 'S' : '—' }}
                 </span>
               </div>
             </template>
@@ -94,18 +99,10 @@
             </template>
           </el-table-column>
 
-          <!-- 视频数据：时长 / 播放 / 喜欢 / 评论 / 收藏 / 转发（三行两列） -->
-          <el-table-column label="视频数据" min-width="162" align="center">
+          <!-- 视频数据：喜欢 / 评论 / 收藏 / 转发（两行两列） -->
+          <el-table-column label="视频数据" min-width="128" align="center">
             <template #default="{ row }">
               <div class="video-stat">
-                <span class="video-stat-item is-duration" :title="row.duration != null ? '视频时长：' + Number(row.duration).toFixed(1) + 'S' : '未获取时长'">
-                  <span class="video-stat-ico"><SocialIcon name="duration" :size="11" /></span>
-                  <span class="video-stat-num">{{ row.duration != null ? Number(row.duration).toFixed(1) + 'S' : '—' }}</span>
-                </span>
-                <span class="video-stat-item is-play" title="播放量">
-                  <span class="video-stat-ico"><SocialIcon name="play" :size="11" /></span>
-                  <span class="video-stat-num">{{ formatCount(row.play_count) }}</span>
-                </span>
                 <span class="video-stat-item is-like" title="喜欢数">
                   <span class="video-stat-ico"><SocialIcon name="heart" :size="11" /></span>
                   <span class="video-stat-num">{{ formatCount(row.like_count) }}</span>
@@ -295,7 +292,7 @@
               :src="dialog.form.cover"
               mode="single"
               shape="square"
-              :size="88"
+              :size="132"
               @update:src="(url) => (dialog.form.cover = url)"
             />
             <span class="cover-tip">解析链接时自动获取封面，也可手动上传替换</span>
@@ -333,10 +330,6 @@
         </el-form-item>
         <el-form-item label="视频数据" prop="like_count" required>
           <div class="video-data-edit">
-            <div class="video-data-field">
-              <label class="is-play" title="播放量"><SocialIcon name="play" :size="14" /></label>
-              <el-input-number v-model="dialog.form.play_count" :min="0" :max="99999999" :controls="false" size="small" />
-            </div>
             <div class="video-data-field">
               <label class="is-like" title="喜欢数"><SocialIcon name="heart" :size="14" /></label>
               <el-input-number v-model="dialog.form.like_count" :min="0" :max="99999999" :controls="false" size="small" />
@@ -921,7 +914,6 @@ async function doParse() {
     // 自动抓取回填：作者 / 封面 / 视频数据
     if (data.author) dialog.form.author = data.author
     if (data.cover) dialog.form.cover = data.cover
-    if (data.play_count) dialog.form.play_count = data.play_count
     if (data.like_count) dialog.form.like_count = data.like_count
     if (data.comment_count) dialog.form.comment_count = data.comment_count
     if (data.collect_count) dialog.form.collect_count = data.collect_count
@@ -929,7 +921,7 @@ async function doParse() {
     if (data.duration != null) dialog.form.duration = data.duration
     if (data.published_at) dialog.form.published_at = formatDate(data.published_at)
     if (data.fetch_status === 'auto') {
-      ElMessage.success('解析成功，已自动获取作者、封面、播放量、发布时间、时长与视频数据，可手动调整')
+      ElMessage.success('解析成功，已自动获取作者、封面、发布时间、时长与视频数据，可手动调整')
     } else if (data.title_from_text) {
       ElMessage.success('解析成功，已生成名称并保留原始短链')
     } else {
@@ -1024,7 +1016,7 @@ watch(() => route.query.keyword, (kw) => {
   transform: scale(0.92);
   transform-origin: left center;
 }
-/* 视频名称第三行：仅发布时间（解析回填，小字） */
+/* 视频名称第三行：发布时间 + 时长（解析回填，小字） */
 .idea-video-meta {
   display: flex;
   align-items: center;
@@ -1040,6 +1032,7 @@ watch(() => route.query.keyword, (kw) => {
   gap: 3px;
   white-space: nowrap;
 }
+.idea-meta-sep { opacity: 0.6; }
 
 /* 创意提供：上提交人标签、下提交时间（两者同宽、日期小字） */
 .idea-owner-cell {
@@ -1088,7 +1081,7 @@ watch(() => route.query.keyword, (kw) => {
   width: 100%;
 }
 
-/* 视频数据列：三行两列，首行为「时长 + 播放量」，每项为「图标 + 数字」 */
+/* 视频数据列：两行两列（喜欢 / 评论 / 收藏 / 转发），每项为「图标 + 数字」 */
 .video-stat {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1115,9 +1108,7 @@ watch(() => route.query.keyword, (kw) => {
   font-weight: 600;
   color: var(--adm-text-regular, #303133);
 }
-/* 六项各自主题色：时长灰蓝 / 播放紫 / 喜欢红 / 评论蓝 / 收藏橙 / 转发青 */
-.video-stat-item.is-duration .video-stat-ico { color: #7b8794; }
-.video-stat-item.is-play .video-stat-ico { color: var(--el-color-primary, #4a7cc4); }
+/* 四项各自主题色：喜欢红 / 评论蓝 / 收藏橙 / 转发青 */
 .video-stat-item.is-like .video-stat-ico { color: #e8474f; }
 .video-stat-item.is-comment .video-stat-ico { color: #4a7cc4; }
 .video-stat-item.is-collect .video-stat-ico { color: #e6932c; }
@@ -1389,7 +1380,7 @@ watch(() => route.query.keyword, (kw) => {
 }
 .video-data-edit {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
 }

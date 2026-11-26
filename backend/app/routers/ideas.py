@@ -319,7 +319,7 @@ def parse_idea(payload: ShareTextIn, user: User = Depends(get_current_user)):
             except (TypeError, ValueError, OSError, OverflowError):
                 result["published_at"] = None
         result["fetch_status"] = "auto"
-        result["message"] = "已自动获取作者、封面、播放量、发布时间、时长与视频数据，可手动调整"
+        result["message"] = "已自动获取作者、封面、发布时间、时长与视频数据，可手动调整"
     else:
         result["message"] = (result.get("message") or "") + "；自动抓取未成功，作者/封面/数据请手动补充"
 
