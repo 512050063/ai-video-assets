@@ -112,7 +112,7 @@
         </el-tabs>
       </section>
 
-      <!-- 选项配置：视频分类 / 制作平台 / 发布平台 合并为一张卡片 -->
+      <!-- 选项配置：视频分类 / 创作平台 / 发布平台 合并为一张卡片 -->
       <section class="adm-card settings-card settings-card--wide settings-card--fixed">
         <div class="settings-card-head">
           <span class="settings-icon is-mint"><el-icon :size="15"><Files /></el-icon></span>
@@ -138,7 +138,7 @@
               <button type="button" class="option-add-link" @click="addCategory"><el-icon><Plus /></el-icon>添加分类</button>
             </div>
           </el-tab-pane>
-          <el-tab-pane label="制作平台" name="platform">
+          <el-tab-pane label="创作平台" name="platform">
             <div class="option-toolbar">
               <span class="display-mode-label">显示方式</span>
               <el-select v-model="form.display.platform" size="small" style="width: 116px" @change="saveDisplay">
@@ -511,7 +511,7 @@ async function saveDisplay() {
   })
 }
 
-// 与制作平台 / 发布平台完全同款机制：点「添加」先插入一行空白，编辑后即时保存。
+// 与创作平台 / 发布平台完全同款机制：点「添加」先插入一行空白，编辑后即时保存。
 function addCategory() {
   if (categoryList.value.some((c) => !c.id)) return ElMessage.warning('请先填写上一条新增分类')
   categoryList.value.push({

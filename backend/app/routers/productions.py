@@ -93,7 +93,7 @@ def _apply_in(db: Session, production: Production, data: ProductionIn):
     if "platform" in provided and data.platform and data.platform not in _valid_platforms(db):
         allowed = sorted(_valid_platforms(db))
         raise HTTPException(
-            status_code=400, detail=f"无效制作平台: {data.platform}（可选 {'/'.join(allowed)}）"
+            status_code=400, detail=f"无效创作平台: {data.platform}（可选 {'/'.join(allowed)}）"
         )
     if "category_id" in provided and data.category_id is not None and not db.query(Category).get(data.category_id):
         raise HTTPException(status_code=400, detail="分类不存在")
@@ -319,7 +319,7 @@ def create_production(
         if not data.characters:
             missing.append("使用资产")
         if not (data.platform or "").strip():
-            missing.append("制作平台")
+            missing.append("创作平台")
         if not any((p.text or "").strip() for p in data.prompt):
             missing.append("提示词")
         if missing:

@@ -201,7 +201,7 @@
           <span class="help-no">2</span>
           <div>
             <div class="help-title">视频创作</div>
-            <div class="help-desc">绑定人物资产与共享素材，选择制作平台、录入提示词，系统自动记录开始时间与完成时间。</div>
+            <div class="help-desc">绑定人物资产与共享素材，选择创作平台、录入提示词，系统自动记录开始时间与完成时间。</div>
           </div>
         </div>
         <div class="help-step">

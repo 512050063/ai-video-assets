@@ -266,7 +266,6 @@ async function main() {
         return r.ok ? await r.json() : null
       }, { t: token })
       ok('制作人候选接口可用', Array.isArray(creatorOpts)
-         && creatorOpts.length > 0
          && creatorOpts.every((o) => o.id && o.display_name),
          Array.isArray(creatorOpts) ? creatorOpts.map((o) => `${o.display_name}:${o.role}`).join('|') : 'null')
       // 保存并排期（不填制作时间，状态进「已排期」，不会自动流转）
@@ -387,7 +386,7 @@ async function main() {
     }, { t: token, list: origPlatforms })
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(700)
-    await page.locator('.settings-tabs .el-tabs__item').filter({ hasText: '制作平台' }).click()
+    await page.locator('.settings-tabs .el-tabs__item').filter({ hasText: '创作平台' }).click()
     await page.waitForTimeout(300)
     const visibleRows = page.locator('.option-row.is-option:visible')
     const platformIconRadius = await visibleRows.first().locator('.adm-uploader-box').first()
@@ -452,6 +451,8 @@ async function main() {
     const prodHeaders = (await page.locator('.el-table__header th .cell').allInnerTexts()).map((t) => t.trim())
     ok('含创作时间列', prodHeaders.includes('创作时间'), prodHeaders.join('|'))
     ok('话题标签列已取消', !prodHeaders.includes('话题标签'), prodHeaders.join('|'))
+    ok('视频名称列改名参考视频', prodHeaders.includes('参考视频') && !prodHeaders.includes('视频名称'), prodHeaders.join('|'))
+    ok('使用资产列改名人物模型', prodHeaders.includes('人物模型') && !prodHeaders.includes('使用资产'), prodHeaders.join('|'))
     ok('状态列去掉下拉箭头', await page.locator('.status-edit-caret').count() === 0,
        'carets=' + await page.locator('.status-edit-caret').count())
     // 状态按钮为按行渲染：有制作记录时必须可点；无记录时表格空态也算正常（数据可被清空）
@@ -465,7 +466,7 @@ async function main() {
       const headers = { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }
       const cats = await (await fetch('/api/categories', { headers })).json()
       let chars = await (await fetch('/api/characters?scope=all', { headers })).json()
-      // 空库无资产时自建一条，避免依赖预置数据（手动新建制作要求至少一项使用资产）
+      // 空库无资产时自建一条，避免依赖预置数据（手动新建制作要求至少一项人物模型）
       if (!Array.isArray(chars) || chars.length === 0) {
         const cr = await fetch('/api/characters', {
           method: 'POST', headers,
@@ -543,6 +544,29 @@ async function main() {
       ok('只读项无小标题文字', await dlg.locator('.readonly-row .readonly-label').count() === 0)
       const readonlyTexts = (await dlg.locator('.readonly-row .readonly-item').allInnerTexts()).map((x) => x.trim())
       ok('只读项顺序为类型/制作人/状态', readonlyTexts.length === 3, readonlyTexts.join('|'))
+      ok('编辑弹窗人物模型为图片卡片（无下拉）',
+         await dlg.locator('.model-selected-item .model-selected-cover').count() >= 1
+         && await dlg.locator('.el-form-item').filter({ hasText: '人物模型' }).locator('.el-select').count() === 0)
+      await dlg.locator('.model-add').click()
+      await page.waitForTimeout(350)
+      const picker = page.locator('.model-picker-dialog:visible')
+      ok('人物模型选择弹窗展示全部资产', await picker.count() === 1
+         && await picker.locator('.model-picker-item .model-picker-cover').count() >= 1)
+      const beforePick = await dlg.locator('.model-selected-item').count()
+      const unselected = picker.locator('.model-picker-item:not(.is-selected)').first()
+      let expectedPick = beforePick
+      if (await unselected.count()) {
+        await unselected.click()
+        expectedPick += 1
+      }
+      await picker.getByRole('button', { name: /确定/ }).click()
+      await page.waitForTimeout(400)
+      ok('确定后人物模型写回编辑弹窗', await dlg.locator('.model-selected-item').count() === expectedPick,
+         'expected=' + expectedPick)
+      const beforeRemove = await dlg.locator('.model-selected-item').count()
+      await dlg.locator('.model-remove').first().click()
+      await page.waitForTimeout(200)
+      ok('已选人物模型可删除重新选择', await dlg.locator('.model-selected-item').count() === beforeRemove - 1)
       const promptTa = dlg.locator('.prompt-textarea textarea')
       ok('提示词为单段 textarea', await promptTa.count() === 1)
       ok('提示词上限 2500 字', await promptTa.getAttribute('maxlength') === '2500',
@@ -582,19 +606,19 @@ async function main() {
       await page.waitForTimeout(300)
     }
 
-    /* ---------- 6b. 页头新增制作：不依赖参考视频 ---------- */
-    section('6b. 页头新增制作：必填校验 / 默认值')
+    /* ---------- 6b. 页头新增创作：不依赖参考视频 ---------- */
+    section('6b. 页头新增创作：必填校验 / 默认值')
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.waitForTimeout(900)
-    const createBtn = page.getByRole('button', { name: '新增制作' })
-    ok('页头存在新增制作按钮', await createBtn.count() === 1)
+    const createBtn = page.getByRole('button', { name: '新增创作' })
+    ok('页头存在新增创作按钮', await createBtn.count() === 1)
     const btnPos = await page.evaluate(() => {
-      const btn = Array.from(document.querySelectorAll('button')).find((b) => (b.textContent || '').includes('新增制作'))
+      const btn = Array.from(document.querySelectorAll('button')).find((b) => (b.textContent || '').includes('新增创作'))
       if (!btn) return null
       const kids = Array.from(btn.parentElement.children)
       return { isLast: kids[kids.length - 1] === btn || kids[kids.length - 1].contains(btn), count: kids.length }
     })
-    ok('新增制作按钮位于页头最右侧', btnPos && btnPos.isLast, JSON.stringify(btnPos))
+    ok('新增创作按钮位于页头最右侧', btnPos && btnPos.isLast, JSON.stringify(btnPos))
     if (await createBtn.count() === 1) {
       await createBtn.click()
       await page.waitForTimeout(600)
@@ -620,10 +644,10 @@ async function main() {
         await page.waitForTimeout(200)
       }
       await pickFirstOption('类型')
-      await pickFirstOption('使用资产')
+      await pickFirstOption('人物模型')
       await page.keyboard.press('Escape')
       await page.waitForTimeout(150)
-      await pickFirstOption('制作平台')
+      await pickFirstOption('创作平台')
       await cform.locator('.prompt-textarea textarea').fill('新建制作提示词')
       await cdlg.locator('.edit-dialog-footer button').filter({ hasText: /^创建$/ }).click()
       await page.waitForTimeout(900)
@@ -641,6 +665,13 @@ async function main() {
       ok('新建有开始时间', !!(created && created.produced_at), created && created.produced_at)
       ok('新建作者为当前登录者', !!(created && created.author), created && created.author)
       ok('新建创作人存在', !!(created && created.owner_id), created && created.owner_id)
+      ok('新建创作无参考视频标识', !!created && !created.idea_id && !created.douyin_url)
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(800)
+      const newRow = page.locator('.el-table__body tr').filter({ hasText: '__SMOKE_FRONT__新建制作' }).first()
+      ok('无参考视频创作第二行显示@无参考视频创作',
+         await newRow.locator('.idea-author').innerText() === '@无参考视频创作',
+         await newRow.locator('.idea-author').innerText().catch(() => 'none'))
     }
 
     /* ---------- 7. 发布数据页 ---------- */

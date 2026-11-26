@@ -1273,7 +1273,7 @@ def run():
 
     section("19. 配置中心：平台图片图标与模块统一展示方式")
     code, plat_set = req("GET", "/settings/platforms")
-    ok("制作平台配置带图片与展示字段", code == 200 and plat_set.get("platforms")
+    ok("创作平台配置带图片与展示字段", code == 200 and plat_set.get("platforms")
        and all(all(k in p for k in ("color", "image", "display"))
                for p in plat_set.get("platforms", [])),
        plat_set.get("platforms"))
@@ -1298,10 +1298,10 @@ def run():
         "mode": "full", "category": "full", "platform": "full", "publish": "full"}})
     code, plat_upd = req("PUT", "/settings", {"key": "platforms", "value": [
         {"name": "测试平台", "color": "#4a7cc4", "image": "/uploads/test-platform.png", "display": "icon"}]})
-    ok("制作平台图片可保存", code == 200, "code=%s" % code)
+    ok("创作平台图片可保存", code == 200, "code=%s" % code)
     code, plat_check = req("GET", "/settings/platforms")
     first_plat = (plat_check.get("platforms") or [{}])[0]
-    ok("制作平台图片已持久化", code == 200
+    ok("创作平台图片已持久化", code == 200
        and first_plat.get("image") == "/uploads/test-platform.png"
        and first_plat.get("display") == "icon", first_plat)
     code, pub_upd = req("PUT", "/settings", {"key": "publish_platforms", "value": [

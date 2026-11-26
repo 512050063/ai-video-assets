@@ -6,7 +6,7 @@
       tone="lilac"
       :desc="isFinished
         ? '查看成片信息、发布平台与时间记录；播放数据请到「发布数据」录入'
-        : '选择人物 / 场景 / 服装资产、制作平台，录入提示词与时间记录'"
+        : '选择人物 / 场景 / 服装资产、创作平台，录入提示词与时间记录'"
     >
       <template #extra>
         <el-button @click="$router.back()">返回</el-button>
@@ -95,7 +95,7 @@
 
             <el-row :gutter="12">
               <el-col :span="12">
-                <el-form-item label="制作平台">
+                <el-form-item label="创作平台">
                   <el-select v-model="form.platform" placeholder="选择平台" clearable style="width: 100%">
                     <el-option
                       v-for="p in settings.platformOptions"

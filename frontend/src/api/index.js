@@ -64,7 +64,7 @@ export const PRODUCTION_STATUS_OPTIONS = [
   { value: '已完成', type: 'success', label: '已发布' }
 ]
 
-// 制作平台
+// 创作平台
 export const PLATFORM_OPTIONS = [
   { value: '硬核', label: '硬核', color: '#4a7cc4' },
   { value: '小云雀', label: '小云雀', color: '#7b62c9' },

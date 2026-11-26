@@ -4,13 +4,13 @@
       :icon="VideoCamera"
       title="视频创作"
       tone="lilac"
-      desc="第二步 · 选择人物 / 场景 / 服装资产、制作平台与提示词；完成后状态更新为已发布"
+      desc="第二步 · 选择人物 / 场景 / 服装资产、创作平台与提示词；完成后状态更新为已发布"
     >
       <template #extra>
         <el-input v-model="keyword" placeholder="搜索名称" clearable style="width: 180px" @keyup.enter="load">
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
-        <el-select v-model="platform" placeholder="制作平台" clearable style="width: 130px" @change="load">
+        <el-select v-model="platform" placeholder="创作平台" clearable style="width: 130px" @change="load">
           <el-option v-for="p in settings.platformOptions" :key="p.name" :label="p.name" :value="p.name">
             <OptionBadge :name="p.name" :color="p.color" :image="p.image" :display="p.display" />
           </el-option>
@@ -24,7 +24,7 @@
           type="primary"
           :icon="Plus"
           @click="openCreate"
-        >新增制作</el-button>
+        >新增创作</el-button>
       </template>
     </PageHeader>
 
@@ -42,18 +42,24 @@
     <el-card shadow="never" class="adm-card adm-card--table" :class="{ 'is-loading': loading }">
       <GridSkeleton v-if="loading" :rows="8" :cols="6" />
       <div class="adm-table-wrap">
-        <el-table :data="pagedList" stripe style="width: 100%" empty-text="还没有创作记录，可点右上角「新增制作」">
-          <!-- 封面 + 视频名称（第二行作者 + 类别） -->
+        <el-table :data="pagedList" stripe style="width: 100%" empty-text="还没有创作记录，可点右上角「新增创作」">
+          <!-- 封面 + 参考视频（第二行作者 + 类别） -->
           <el-table-column label="封面" width="72" align="center">
             <template #default="{ row }">
               <div class="adm-cell-cover">
-                <img v-if="row.cover" :src="row.cover" class="adm-cover-thumb" :alt="row.title" />
+                <img
+                  v-if="row.cover"
+                  :src="row.cover"
+                  class="adm-cover-thumb"
+                  :alt="row.title"
+                  :title="hasReferenceVideo(row) ? '参考视频封面' : '默认封面（无参考视频）'"
+                />
                 <img v-else src="/placeholder.svg" class="adm-cover-thumb is-empty" alt="暂无封面" />
               </div>
             </template>
           </el-table-column>
 
-          <el-table-column label="视频名称" min-width="180" align="left">
+          <el-table-column label="参考视频" min-width="180" align="left">
             <template #default="{ row }">
               <a
                 v-if="row.douyin_url"
@@ -67,7 +73,10 @@
                 {{ row.title || '未命名制作' }}
               </span>
               <div class="adm-cell-sub">
-                <span class="idea-author" :title="row.author || '未获取作者'">@{{ row.author || '未获取' }}</span>
+                <span
+                  class="idea-author"
+                  :title="hasReferenceVideo(row) ? (row.author || '未获取作者') : '无参考视频创作'"
+                >@{{ hasReferenceVideo(row) ? (row.author || '未获取') : '无参考视频创作' }}</span>
                 <OptionBadge
                   v-if="row.category_name"
                   :name="row.category_name"
@@ -80,7 +89,7 @@
             </template>
           </el-table-column>
 
-          <el-table-column label="使用资产" min-width="124" align="left">
+          <el-table-column label="人物模型" min-width="124" align="left">
             <template #default="{ row }">
               <div v-if="row.characters && row.characters.length" class="char-cell">
                 <el-image
@@ -95,11 +104,13 @@
                 </el-image>
                 <span class="char-names" :title="row.characters.map((c) => c.character_name).join('、')">{{ row.characters.map((c) => c.character_name).join('、') }}</span>
               </div>
-              <span v-else class="adm-cell-empty">未绑定</span>
+              <div v-else class="char-cell">
+                <img src="/placeholder.svg" class="char-avatar is-empty" alt="未绑定人物模型" title="未绑定人物模型" />
+              </div>
             </template>
           </el-table-column>
 
-          <el-table-column label="制作平台" min-width="100" align="center">
+          <el-table-column label="创作平台" min-width="100" align="center">
             <template #default="{ row }">
               <OptionBadge
                 v-if="row.platform"
@@ -178,7 +189,7 @@
       <AppPagination v-model:page="page" :total="list.length" v-model:page-size="PAGE_SIZE" />
     </el-card>
 
-    <!-- 新建弹窗：不依赖参考视频，手动创建制作记录 -->
+    <!-- 新建弹窗：无参考视频，手动创建创作记录 -->
     <el-dialog
       v-model="create.visible"
       width="640px"
@@ -189,8 +200,8 @@
       <template #header>
         <DialogHeader
           :icon="VideoCamera"
-          title="新增视频制作"
-          sub="不依赖参考视频 · 封面使用默认图"
+          title="新增视频创作"
+          sub="无参考视频 · 封面使用默认图"
           tone="lilac"
         />
       </template>
@@ -212,19 +223,19 @@
 
           <section class="adm-drawer-section">
             <h4 class="adm-drawer-section-title"><span class="adm-drawer-bar is-mint" />制作信息</h4>
-            <el-form-item label="使用资产" required>
+            <el-form-item label="人物模型" required>
               <el-select
                 v-model="create.form.characterIds"
                 multiple
                 filterable
                 clearable
                 style="width: 100%"
-                placeholder="选择人物资产（可多选）"
+                placeholder="选择人物模型（可多选）"
               >
                 <el-option v-for="a in characterOptions" :key="a.id" :label="a.name" :value="a.id" />
               </el-select>
             </el-form-item>
-            <el-form-item label="制作平台" required>
+            <el-form-item label="创作平台" required>
               <el-select v-model="create.form.platform" placeholder="选择平台" clearable filterable style="width: 100%">
                 <el-option v-for="p in settings.platformOptions" :key="p.name" :label="p.name" :value="p.name">
                   <OptionBadge :name="p.name" :color="p.color" :image="p.image" :display="p.display" />
@@ -320,19 +331,21 @@
 
           <section class="adm-drawer-section">
             <h4 class="adm-drawer-section-title"><span class="adm-drawer-bar is-mint" />制作信息</h4>
-            <el-form-item label="使用资产">
-              <el-select
-                v-model="edit.form.characterIds"
-                multiple
-                filterable
-                clearable
-                style="width: 100%"
-                placeholder="选择人物资产（可多选）"
-              >
-                <el-option v-for="a in characterOptions" :key="a.id" :label="a.name" :value="a.id" />
-              </el-select>
+            <el-form-item label="人物模型">
+              <div class="model-selected-list">
+                <div v-for="a in selectedEditCharacters" :key="a.id" class="model-selected-item" :title="a.name">
+                  <el-image :src="characterCover(a)" fit="cover" class="model-selected-cover">
+                    <template #error><img src="/placeholder.svg" class="model-selected-cover" alt="" /></template>
+                  </el-image>
+                  <span class="model-selected-name">{{ a.name }}</span>
+                  <button type="button" class="model-remove" title="删除该人物模型" @click="removeEditCharacter(a.id)">×</button>
+                </div>
+                <button type="button" class="model-add" @click="openAssetPicker">
+                  <el-icon><Plus /></el-icon>选择人物模型
+                </button>
+              </div>
             </el-form-item>
-            <el-form-item label="制作平台">
+            <el-form-item label="创作平台">
               <el-select v-model="edit.form.platform" placeholder="选择平台" clearable filterable style="width: 100%">
                 <el-option v-for="p in settings.platformOptions" :key="p.name" :label="p.name" :value="p.name">
                   <OptionBadge :name="p.name" :color="p.color" :image="p.image" :display="p.display" />
@@ -361,6 +374,40 @@
           <el-button type="primary" :loading="edit.saving" @click="doEdit">保存</el-button>
         </div>
       </div>
+    </el-dialog>
+
+    <!-- 人物模型选择：展示全部人物资产，点击选中/取消，确定后写回编辑表单 -->
+    <el-dialog
+      v-model="assetPicker.visible"
+      title="选择人物模型"
+      width="760px"
+      class="adm-dialog-detail model-picker-dialog"
+      append-to-body
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <div class="model-picker-grid">
+        <button
+          v-for="a in characterOptions"
+          :key="a.id"
+          type="button"
+          class="model-picker-item"
+          :class="{ 'is-selected': assetPicker.selected.includes(a.id) }"
+          :title="a.name"
+          @click="toggleAssetPicker(a.id)"
+        >
+          <el-image :src="characterCover(a)" fit="cover" class="model-picker-cover">
+            <template #error><img src="/placeholder.svg" class="model-picker-cover" alt="" /></template>
+          </el-image>
+          <span class="model-picker-name">{{ a.name }}</span>
+          <span v-if="assetPicker.selected.includes(a.id)" class="model-picker-check"><el-icon><CircleCheckFilled /></el-icon></span>
+        </button>
+      </div>
+      <div v-if="!characterOptions.length" class="model-picker-empty">暂无人物资产，请先在「人物资产」页面添加。</div>
+      <template #footer>
+        <el-button plain @click="assetPicker.visible = false">取消</el-button>
+        <el-button type="primary" @click="confirmAssetPicker">确定（{{ assetPicker.selected.length }}）</el-button>
+      </template>
     </el-dialog>
 
     <!-- 状态确认：制作中确认完成→待发布；待发布确认还原→制作中 -->
@@ -475,6 +522,11 @@ function categoryName(id) {
   return c ? c.name : ''
 }
 
+// 区分「由参考视频创建」与「新增创作（无参考视频）」
+function hasReferenceVideo(row) {
+  return !!(row.idea_id || row.douyin_url)
+}
+
 // 新增制作：弹窗不展示封面/作者/创作人，保存时自动生成默认封面、当前登录作者与创作人、开始时间=提交时间
 function openCreate() {
   Object.assign(create.form, emptyCreateForm())
@@ -485,8 +537,8 @@ async function doCreate() {
   const f = create.form
   if (!f.title.trim()) return ElMessage.warning('请填写视频名称')
   if (!f.category_id) return ElMessage.warning('请选择类型')
-  if (!f.characterIds.length) return ElMessage.warning('请选择使用资产')
-  if (!f.platform) return ElMessage.warning('请选择制作平台')
+  if (!f.characterIds.length) return ElMessage.warning('请选择人物模型')
+  if (!f.platform) return ElMessage.warning('请选择创作平台')
   if (!f.promptText.trim()) return ElMessage.warning('请填写提示词')
   create.saving = true
   try {
@@ -542,6 +594,37 @@ async function loadCharacters() {
   }
 }
 
+/* 人物模型：资产封面取第一张人物图片，缺失时用默认图 */
+function characterCover(asset) {
+  return asset?.images?.[0]?.file_path || asset?.cover || '/placeholder.svg'
+}
+
+const selectedEditCharacters = computed(() =>
+  characterOptions.value.filter((a) => edit.form.characterIds.includes(a.id))
+)
+
+const assetPicker = reactive({ visible: false, selected: [] })
+
+function openAssetPicker() {
+  assetPicker.selected = [...edit.form.characterIds]
+  assetPicker.visible = true
+}
+
+function toggleAssetPicker(id) {
+  const idx = assetPicker.selected.indexOf(id)
+  if (idx >= 0) assetPicker.selected.splice(idx, 1)
+  else assetPicker.selected.push(id)
+}
+
+function confirmAssetPicker() {
+  edit.form.characterIds = [...assetPicker.selected]
+  assetPicker.visible = false
+}
+
+function removeEditCharacter(id) {
+  edit.form.characterIds = edit.form.characterIds.filter((x) => x !== id)
+}
+
 // 制作中/待发布状态可点击确认流转；已完成只读
 function canChangeStatus(row) {
   return perm.can('productions.edit') && (row.is_owner || auth.isAdmin)
@@ -554,10 +637,10 @@ function statusClickTitle(row) {
   return productionStatusLabel(row.status)
 }
 
-// 制作中→待发布前的信息完整性校验：制作平台 + 提示词内容必填
+// 制作中→待发布前的信息完整性校验：创作平台 + 提示词内容必填
 function missingProductionInfo(row) {
   const missing = []
-  if (!row.platform) missing.push('制作平台')
+  if (!row.platform) missing.push('创作平台')
   const promptText = (row.prompt || []).map((p) => p.text || '').join('').trim()
   if (!promptText) missing.push('提示词')
   return missing
@@ -709,6 +792,7 @@ onMounted(async () => {
 
 .char-cell { display: flex; align-items: center; gap: 5px; }
 .char-avatar { width: 26px; height: 26px; border-radius: 9px; border: 1px solid rgba(123, 163, 209, 0.2); display: block; flex-shrink: 0; background: var(--adm-panel-soft); }
+.char-avatar.is-empty { opacity: 0.55; }
 .char-names { font-size: 12.5px; color: var(--adm-text-secondary); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
 
 /* 创作时间：开始 / 完成上下两行，图标区分 */
@@ -741,6 +825,46 @@ onMounted(async () => {
   border-radius: 999px;
   font-weight: 600;
 }
+/* 人物模型：已选资产图片卡片（可删除）+ 选择入口 */
+.model-selected-list { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; width: 100%; }
+.model-selected-item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: 72px; padding: 6px 4px; border: 1px solid var(--adm-border); border-radius: 8px;
+  background: var(--adm-panel-soft, #f8fafc);
+}
+.model-selected-cover { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; background: var(--adm-panel); }
+.model-selected-name { max-width: 64px; font-size: 11px; line-height: 1.3; color: var(--adm-text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-remove {
+  position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; padding: 0;
+  border: none; border-radius: 50%; background: #e28a8a; color: #fff;
+  font-size: 14px; line-height: 16px; cursor: pointer;
+}
+.model-remove:hover { background: #d37272; }
+.model-add {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 108px; min-height: 76px; padding: 8px 12px;
+  border: 1px dashed var(--el-color-primary-light-5, #b3d1ee); border-radius: 8px;
+  background: var(--adm-blue-bg, #eef4ff); color: var(--el-color-primary, #4a7cc4);
+  font-size: 12px; cursor: pointer;
+}
+.model-add:hover { background: #e3eeff; }
+/* 人物模型选择弹窗：全部人物资产图片卡片 */
+.model-picker-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px;
+  max-height: 52vh; overflow-y: auto; padding: 4px 2px;
+}
+.model-picker-item {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 6px; border: 1px solid var(--adm-border); border-radius: 10px;
+  background: var(--adm-panel, #fff); color: inherit; cursor: pointer;
+}
+.model-picker-item:hover { border-color: var(--el-color-primary-light-5, #b3d1ee); background: var(--adm-panel-soft, #f8fafc); }
+.model-picker-item.is-selected { border-color: var(--el-color-primary, #4a7cc4); background: var(--adm-blue-bg, #eef4ff); }
+.model-picker-cover { width: 96px; height: 96px; border-radius: 8px; object-fit: cover; background: var(--adm-panel-soft, #f8fafc); }
+.model-picker-name { max-width: 100%; font-size: 12px; color: var(--adm-text-regular, #303133); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-picker-check { position: absolute; top: 4px; right: 6px; color: var(--el-color-primary, #4a7cc4); font-size: 18px; line-height: 1; }
+.model-picker-empty { padding: 32px 0; text-align: center; color: var(--adm-text-placeholder, #a8abb2); font-size: 13px; }
+
 /* 只读项：类型 / 制作人 / 状态，横向排列在参考视频卡片内，无小标题 */
 .readonly-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .readonly-item { display: inline-flex; align-items: center; }
