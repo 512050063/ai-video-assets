@@ -22,7 +22,7 @@
     </el-tooltip>
     <span v-if="!tags.length" class="adm-cell-empty">{{ emptyText }}</span>
 
-    <!-- 同宽隐藏容器：按实际列宽计算两行内能放几个标签 -->
+    <!-- 同宽隐藏容器：按实际列宽计算指定行数内能放几个标签 -->
     <div ref="measureRef" class="adm-cell-tags tag-cell tag-cell--measure" aria-hidden="true">
       <span v-for="t in tags" :key="t" class="adm-tag-chip">#{{ t }}</span>
       <span v-if="tags.length" class="adm-tag-chip is-more">+{{ tags.length }}</span>
@@ -62,7 +62,7 @@ function recalc() {
   const chips = Array.from(measure.querySelectorAll('.adm-tag-chip'))
   const realChips = chips.slice(0, props.tags.length)
   const moreChip = chips[props.tags.length]
-  // 从多到少尝试：必须保证「可见标签 + +N」一起落在两行内
+  // 从多到少尝试：必须保证「可见标签 + +N」一起落在指定行数内
   for (let n = props.tags.length; n >= 0; n -= 1) {
     realChips.forEach((chip, i) => { chip.style.display = i < n ? '' : 'none' })
     if (moreChip) moreChip.style.display = n < props.tags.length ? '' : 'none'

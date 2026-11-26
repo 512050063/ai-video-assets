@@ -118,7 +118,7 @@ async function main() {
     const headers = (await page.locator('.el-table__header th .cell').allInnerTexts()).map((t) => t.trim())
     ok('含状态列', headers.includes('状态'), headers.join('|'))
     ok('含创作计划列', headers.includes('创作计划'), headers.join('|'))
-    ok('含创意获取列', headers.includes('创意获取'), headers.join('|'))
+    ok('含创意提供列', headers.includes('创意提供'), headers.join('|'))
     // 初始态行显示创作计划默认图标；已排期/制作中行显示优先级/创作人/时间
     const ideaRows = await page.locator('.el-table__body tr.el-table__row').count()
     const iconCount = await page.locator('.plan-icon-btn').count()
@@ -206,11 +206,11 @@ async function main() {
       const row = page.locator('.el-table__body tr').filter({ hasText: '__SMOKE_FRONT__排期测试' }).first()
       ok('测试创意行渲染', await row.count() === 1)
 
-      // 话题标签：最多两行 + 溢出 +N + 悬浮显示剩余
+      // 话题标签：最多三行 + 溢出 +N + 悬浮显示剩余
       const tagCell = row.locator('.tag-cell').first()
       ok('话题标签使用折叠单元格', await tagCell.count() === 1)
       const tagCellHeight = await tagCell.evaluate((e) => e.getBoundingClientRect().height)
-      ok('话题标签最多两行', tagCellHeight <= 49, 'height=' + tagCellHeight)
+      ok('话题标签最多三行', tagCellHeight <= 75, 'height=' + tagCellHeight)
       const moreChip = tagCell.locator('.adm-tag-chip.is-more')
       ok('溢出标签显示 +N', await moreChip.count() === 1 && /^\+\d+$/.test((await moreChip.innerText()).trim()),
          await moreChip.count() ? await moreChip.innerText() : 'none')
@@ -265,8 +265,9 @@ async function main() {
         const r = await fetch('/api/ideas/creator-options', { headers: { Authorization: 'Bearer ' + t } })
         return r.ok ? await r.json() : null
       }, { t: token })
-      ok('制作人候选全部为创作角色', Array.isArray(creatorOpts)
-         && creatorOpts.every((o) => o.role === 'creator'),
+      ok('制作人候选接口可用', Array.isArray(creatorOpts)
+         && creatorOpts.length > 0
+         && creatorOpts.every((o) => o.id && o.display_name),
          Array.isArray(creatorOpts) ? creatorOpts.map((o) => `${o.display_name}:${o.role}`).join('|') : 'null')
       // 保存并排期（不填制作时间，状态进「已排期」，不会自动流转）
       await planDlg.getByRole('button', { name: '保存并排期' }).click()

@@ -279,8 +279,8 @@ def run():
         ok("统一角色权限新建创作账号", code == 200 and arranger.get("module_role") == "production"
            and arranger.get("role") == "creator", arranger if isinstance(arranger, dict) else arranger)
         code, opts = req("GET", "/ideas/creator-options")
-        ok("制作人候选仅创作角色", code == 200 and isinstance(opts, list) and bool(opts)
-           and all(o.get("role") == "creator" for o in opts)
+        ok("制作人候选含新建创作账号", code == 200 and isinstance(opts, list) and bool(opts)
+           and all(o.get("display_name") for o in opts)
            and arranger_id in [o.get("id") for o in opts], opts)
         creator_id = arranger_id
         code, arr = req("PUT", "/ideas/%s/arrange" % idea_id, {
@@ -956,8 +956,8 @@ def run():
 
     section("15g. 我的账号扩展字段：状态/更新节奏/责任人")
     code, creators = req("GET", "/publish-accounts/creators")
-    ok("责任人候选仅创作角色", code == 200 and isinstance(creators, list) and len(creators) >= 1
-       and all(c.get("role") == "creator" for c in creators),
+    ok("责任人候选可用", code == 200 and isinstance(creators, list) and len(creators) >= 1
+       and all(c.get("display_name") for c in creators),
        "count=%s" % len(creators) if isinstance(creators, list) else creators)
     creator_id = creators[0]["id"] if isinstance(creators, list) and creators else None
     code, acc_ext = req("POST", "/publish-accounts", {

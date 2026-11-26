@@ -77,32 +77,31 @@
                 />
                 <span v-else class="adm-cell-empty">—</span>
               </div>
-              <!-- 视频元信息：发布时间 + 时长（解析链接时自动回填） -->
+              <!-- 视频元信息：第三行只显示发布时间（时长已移至「视频数据」列首行） -->
               <div class="idea-video-meta">
                 <span class="idea-meta-item" :title="row.published_at ? '发布时间：' + formatDateTime(row.published_at) : '未获取发布时间'">
                   <el-icon :size="11"><Calendar /></el-icon>
                   {{ row.published_at ? formatDate(row.published_at) : '—' }}
                 </span>
-                <span class="idea-meta-sep">·</span>
-                <span class="idea-meta-item" :title="row.duration ? '视频时长：' + formatDuration(row.duration) : '未获取时长'">
-                  <el-icon :size="11"><Timer /></el-icon>
-                  {{ row.duration ? formatDuration(row.duration) : '—' }}
-                </span>
               </div>
             </template>
           </el-table-column>
 
-          <!-- 话题标签：最多两行，溢出显示 +N，悬浮展示剩余标签 -->
+          <!-- 话题标签：最多三行，溢出显示 +N，悬浮展示剩余标签 -->
           <el-table-column label="话题标签" min-width="136" align="left">
             <template #default="{ row }">
-              <TagCell :tags="row.tags || []" />
+              <TagCell :tags="row.tags || []" :max-lines="3" />
             </template>
           </el-table-column>
 
-          <!-- 视频数据：播放 / 喜欢 / 评论 / 收藏 / 转发（三行两列 / 播放独占一行） -->
-          <el-table-column label="视频数据" min-width="150" align="center">
+          <!-- 视频数据：时长 / 播放 / 喜欢 / 评论 / 收藏 / 转发（三行两列） -->
+          <el-table-column label="视频数据" min-width="162" align="center">
             <template #default="{ row }">
               <div class="video-stat">
+                <span class="video-stat-item is-duration" :title="row.duration != null ? '视频时长：' + Number(row.duration).toFixed(1) + 'S' : '未获取时长'">
+                  <span class="video-stat-ico"><SocialIcon name="duration" :size="11" /></span>
+                  <span class="video-stat-num">{{ row.duration != null ? Number(row.duration).toFixed(1) + 'S' : '—' }}</span>
+                </span>
                 <span class="video-stat-item is-play" title="播放量">
                   <span class="video-stat-ico"><SocialIcon name="play" :size="11" /></span>
                   <span class="video-stat-num">{{ formatCount(row.play_count) }}</span>
@@ -144,8 +143,8 @@
             </template>
           </el-table-column>
 
-          <!-- 创意获取：上为提交人昵称标签，下为提交时间（同宽、小字） -->
-          <el-table-column label="创意获取" min-width="136" align="center">
+          <!-- 创意提供：上为提交人昵称标签，下为提交时间（同宽、小字） -->
+          <el-table-column label="创意提供" min-width="136" align="center">
             <template #default="{ row }">
               <div class="idea-owner-cell">
                 <span class="idea-owner-tag" :title="row.owner_name || '未归属'">{{ row.owner_name || '未归属' }}</span>
@@ -316,7 +315,7 @@
         <el-form-item label="视频信息">
           <div class="video-data-edit is-meta">
             <div class="video-data-field">
-              <label><el-icon><Calendar /></el-icon> 发布时间</label>
+              <label title="发布时间"><el-icon><Calendar /></el-icon></label>
               <el-date-picker
                 v-model="dialog.form.published_at"
                 type="date"
@@ -327,7 +326,7 @@
               />
             </div>
             <div class="video-data-field">
-              <label><el-icon><Timer /></el-icon> 时长（秒）</label>
+              <label title="视频时长（秒）"><SocialIcon name="duration" :size="14" /></label>
               <el-input-number v-model="dialog.form.duration" :min="0" :max="86400" :precision="1" controls-position="right" size="small" />
             </div>
           </div>
@@ -335,27 +334,26 @@
         <el-form-item label="视频数据" prop="like_count" required>
           <div class="video-data-edit">
             <div class="video-data-field">
-              <label class="is-play"><SocialIcon name="play" :size="12" /> 播放</label>
-              <el-input-number v-model="dialog.form.play_count" :min="0" :max="99999999" controls-position="right" size="small" />
+              <label class="is-play" title="播放量"><SocialIcon name="play" :size="14" /></label>
+              <el-input-number v-model="dialog.form.play_count" :min="0" :max="99999999" :controls="false" size="small" />
             </div>
             <div class="video-data-field">
-              <label class="is-like"><SocialIcon name="heart" :size="12" /> 喜欢</label>
-              <el-input-number v-model="dialog.form.like_count" :min="0" :max="99999999" controls-position="right" size="small" />
+              <label class="is-like" title="喜欢数"><SocialIcon name="heart" :size="14" /></label>
+              <el-input-number v-model="dialog.form.like_count" :min="0" :max="99999999" :controls="false" size="small" />
             </div>
             <div class="video-data-field">
-              <label><SocialIcon name="comment" :size="12" /> 评论</label>
-              <el-input-number v-model="dialog.form.comment_count" :min="0" :max="99999999" controls-position="right" size="small" />
+              <label title="评论数"><SocialIcon name="comment" :size="14" /></label>
+              <el-input-number v-model="dialog.form.comment_count" :min="0" :max="99999999" :controls="false" size="small" />
             </div>
             <div class="video-data-field">
-              <label><SocialIcon name="star" :size="12" /> 收藏</label>
-              <el-input-number v-model="dialog.form.collect_count" :min="0" :max="99999999" controls-position="right" size="small" />
+              <label title="收藏数"><SocialIcon name="star" :size="14" /></label>
+              <el-input-number v-model="dialog.form.collect_count" :min="0" :max="99999999" :controls="false" size="small" />
             </div>
             <div class="video-data-field">
-              <label><SocialIcon name="share" :size="12" /> 转发</label>
-              <el-input-number v-model="dialog.form.share_count" :min="0" :max="99999999" controls-position="right" size="small" />
+              <label title="转发数"><SocialIcon name="share" :size="14" /></label>
+              <el-input-number v-model="dialog.form.share_count" :min="0" :max="99999999" :controls="false" size="small" />
             </div>
           </div>
-          <div class="form-tip">解析链接时自动获取，也可手工填写；列表「视频数据」列按此展示</div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="dialog.form.remark" type="textarea" :rows="2" placeholder="创意亮点、参考理由等" />
@@ -664,17 +662,6 @@ function formatCount(n) {
   if (v >= 10000) return (v / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
   if (v >= 1000) return (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
   return String(v)
-}
-
-// 视频时长（秒）→ mm:ss / h:mm:ss
-function formatDuration(seconds) {
-  const total = Math.round(Number(seconds || 0))
-  if (total <= 0) return '—'
-  const h = Math.floor(total / 3600)
-  const m = Math.floor((total % 3600) / 60)
-  const s = total % 60
-  const pad = (n) => String(n).padStart(2, '0')
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
 // 今日日期（YYYY-MM-DD，本地时区），用于创作计划默认制作时间
@@ -1037,7 +1024,7 @@ watch(() => route.query.keyword, (kw) => {
   transform: scale(0.92);
   transform-origin: left center;
 }
-/* 视频名称第三行：发布时间 + 时长（解析回填，小字） */
+/* 视频名称第三行：仅发布时间（解析回填，小字） */
 .idea-video-meta {
   display: flex;
   align-items: center;
@@ -1053,9 +1040,8 @@ watch(() => route.query.keyword, (kw) => {
   gap: 3px;
   white-space: nowrap;
 }
-.idea-meta-sep { opacity: 0.6; }
 
-/* 创意获取：上提交人标签、下提交时间（两者同宽、日期小字） */
+/* 创意提供：上提交人标签、下提交时间（两者同宽、日期小字） */
 .idea-owner-cell {
   display: flex;
   flex-direction: column;
@@ -1102,7 +1088,7 @@ watch(() => route.query.keyword, (kw) => {
   width: 100%;
 }
 
-/* 视频数据列：播放独占首行，其余两行两列，每项为「图标 + 数字」 */
+/* 视频数据列：三行两列，首行为「时长 + 播放量」，每项为「图标 + 数字」 */
 .video-stat {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1111,10 +1097,6 @@ watch(() => route.query.keyword, (kw) => {
   gap: 5px 8px;
   width: 100%;
   font-variant-numeric: tabular-nums;
-}
-.video-stat-item.is-play {
-  grid-column: 1 / -1;
-  justify-self: center;
 }
 .video-stat-item {
   display: inline-flex;
@@ -1133,7 +1115,8 @@ watch(() => route.query.keyword, (kw) => {
   font-weight: 600;
   color: var(--adm-text-regular, #303133);
 }
-/* 五项各自主题色：播放紫 / 喜欢红 / 评论蓝 / 收藏橙 / 转发青 */
+/* 六项各自主题色：时长灰蓝 / 播放紫 / 喜欢红 / 评论蓝 / 收藏橙 / 转发青 */
+.video-stat-item.is-duration .video-stat-ico { color: #7b8794; }
 .video-stat-item.is-play .video-stat-ico { color: var(--el-color-primary, #4a7cc4); }
 .video-stat-item.is-like .video-stat-ico { color: #e8474f; }
 .video-stat-item.is-comment .video-stat-ico { color: #4a7cc4; }
@@ -1304,7 +1287,7 @@ watch(() => route.query.keyword, (kw) => {
   gap: 3px;
   min-width: 0;
 }
-/* 创作人标签：格式同创意获取标签，换绿色系以区分 */
+/* 创作人标签：格式同创意提供标签，换绿色系以区分 */
 .arrange-creator-tag {
   display: inline-flex;
   align-items: center;
@@ -1407,30 +1390,40 @@ watch(() => route.query.keyword, (kw) => {
 .video-data-edit {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 .video-data-edit.is-meta {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+/* 图标与输入框同行，去掉文字标签，压缩弹窗高度 */
 .video-data-field {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 5px;
   min-width: 0;
 }
 .video-data-field > label {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 12px;
+  justify-content: center;
+  flex: 0 0 15px;
+  width: 15px;
   color: var(--adm-text-secondary);
+}
+.video-data-field :deep(.el-input-number),
+.video-data-field :deep(.el-date-editor) {
+  flex: 1;
+  min-width: 0;
 }
 .video-data-field > label .dy-icon {
   color: var(--el-color-primary);
 }
 .video-data-field > label.is-play .dy-icon {
   color: var(--el-color-primary);
+}
+.video-data-field > label.is-like .dy-icon {
+  color: #e8474f;
 }
 .video-data-field > label.is-like .dy-icon {
   color: #e8474f;

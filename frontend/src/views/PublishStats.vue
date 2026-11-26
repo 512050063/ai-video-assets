@@ -104,18 +104,22 @@
             </template>
           </el-table-column>
 
-          <!-- 话题标签：与创意灵感同规则——最多两行，溢出 +N，悬浮展示剩余 -->
+          <!-- 话题标签：与创意灵感同规则——最多三行，溢出 +N，悬浮展示剩余 -->
           <el-table-column label="话题标签" min-width="136" align="left">
             <template #default="{ row }">
-              <TagCell :tags="row.tags || []" />
+              <TagCell :tags="row.tags || []" :max-lines="3" />
             </template>
           </el-table-column>
 
-          <el-table-column label="视频数据" min-width="148" align="center">
+          <el-table-column label="视频数据" min-width="162" align="center">
             <template #default="{ row }">
               <div class="video-stat">
+                <span class="video-stat-item is-duration" :title="row.duration != null ? '视频时长：' + Number(row.duration).toFixed(1) + 'S' : '未获取时长'">
+                  <span class="video-stat-ico"><SocialIcon name="duration" :size="11" /></span>
+                  <span class="video-stat-num">{{ row.duration != null ? Number(row.duration).toFixed(1) + 'S' : '—' }}</span>
+                </span>
                 <span class="video-stat-item is-play" title="播放量">
-                  <span class="video-stat-ico"><el-icon :size="12"><VideoPlay /></el-icon></span>
+                  <span class="video-stat-ico"><SocialIcon name="play" :size="11" /></span>
                   <span class="video-stat-num">{{ formatCount(row.plays) }}</span>
                 </span>
                 <span class="video-stat-item is-like" title="点赞量">
@@ -1256,7 +1260,7 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-/* 视频数据：播放 / 点赞 / 评论 / 转发（两行两列，参考创意灵感） */
+/* 视频数据：时长 / 播放 / 点赞 / 评论 / 转发（两列，与创意灵感同规则） */
 .video-stat {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1275,6 +1279,7 @@ onMounted(async () => {
 }
 .video-stat-ico { display: inline-flex; align-items: center; justify-content: center; }
 .video-stat-num { font-size: 12px; font-weight: 600; color: var(--adm-text-regular, #303133); }
+.video-stat-item.is-duration .video-stat-ico { color: #7b8794; }
 .video-stat-item.is-play .video-stat-ico { color: #4a7cc4; }
 .video-stat-item.is-like .video-stat-ico { color: #e8474f; }
 .video-stat-item.is-comment .video-stat-ico { color: #7b62c9; }
