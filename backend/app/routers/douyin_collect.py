@@ -3,6 +3,9 @@
 所有失败都会返回结构化提示（`manual_required`），由前端引导手工录入，
 不会静默失败，也不会阻塞主流程。
 """
+import threading
+import time
+import uuid
 from datetime import datetime
 from typing import Optional
 
@@ -16,7 +19,7 @@ from ..auto_update_service import (
     get_auto_update_config,
     sync_account_publish_videos,
 )
-from ..database import get_db
+from ..database import SessionLocal, get_db
 from ..douyin_collector import (
     CollectError,
     fetch_account,
@@ -42,6 +45,12 @@ from ..schemas import (
 )
 
 router = APIRouter(prefix="/douyin", tags=["douyin"])
+
+# 远程扫码会话：服务端无头浏览器抓二维码，前端轮询状态并展示二维码。
+# 会话只在内存中保存短时状态，登录态仍持久化在 data/douyin_profiles 目录。
+_LOGIN_SESSIONS = {}
+_LOGIN_LOCK = threading.Lock()
+_LOGIN_TTL = 15 * 60
 
 
 def _account_profile(db: Session, account_id: Optional[int]) -> tuple:
@@ -613,18 +622,350 @@ def create_account_from_video(
     }
 
 
+def _enrich_stats_into(result: dict, home_url: str, profile_key: str) -> bool:
+    """用账号登录态补抓作品/获赞/粉丝，写入 result。返回是否拿到有效数据。"""
+    query = (result.get("sec_uid") or result.get("douyin_uid") or home_url or "").strip()
+    if not query:
+        return False
+    try:
+        extra = fetch_account(query, "browser", profile_key=profile_key)
+    except Exception:
+        return False
+    got = False
+    for field in ("video_count", "likes_count", "followers_count"):
+        value = int(extra.get(field) or 0)
+        if value:
+            result[field] = value
+            got = True
+    return got
+
+
+def _enrich_login_result(
+    session_id: str,
+    profile_key: str,
+    home_url: str,
+    payload: dict,
+    update_fn,
+) -> None:
+    """后台线程：登录确认后补抓统计数据，更新账号并推进会话到 success。
+
+    补抓失败不会影响登录态：账号保持已登录、数据为 0，
+    会话带 stats_enrich_failed 标记，前端提示用户点「更新」按钮重试。
+    保持 payload 外层结构（created/account_name）不变，供前端成功提示使用。
+    """
+    data = payload.setdefault("data", {})
+    enriched = _enrich_stats_into(data, home_url, profile_key)
+    if enriched:
+        db = SessionLocal()
+        try:
+            account_id = payload.get("account_id")
+            account = db.query(PublishAccount).get(account_id) if account_id else None
+            if account:
+                for field in ("video_count", "likes_count", "followers_count"):
+                    value = int(data.get(field) or 0)
+                    if value:
+                        setattr(account, field, value)
+                account.douyin_login_status = "已登录"
+                account.updated_at = datetime.now()
+                db.commit()
+        except Exception:
+            pass
+        finally:
+            db.close()
+    update_fn(
+        status="success",
+        message="扫码成功，账号资料已同步" if enriched else "扫码成功，但账号资料同步失败，可点击「更新」按钮重试",
+        result=payload,
+        stats_enrich_failed=not enriched,
+    )
+
+
+def _apply_login_result(
+    db: Session,
+    user_id: int,
+    account_id: Optional[int],
+    profile_key: str,
+    result: dict,
+    defer_stats: bool = False,
+) -> dict:
+    """扫码成功后匹配/新建账号并回填资料；同步与异步入口共用。
+
+    defer_stats=True 时跳过耗时的统计补抓（由后台线程稍后完成），
+    用于远程扫码「先关窗、后补数据」的两阶段流程。
+    """
+    user = db.query(User).get(user_id)
+    created = False
+    if account_id:
+        profile_key, account = _account_profile(db, account_id)
+    else:
+        account = None
+
+    if account is None:
+        sec_uid = (result.get("sec_uid") or "").strip()
+        douyin_uid = (result.get("douyin_uid") or "").strip()
+        conditions = []
+        if sec_uid:
+            conditions.append(PublishAccount.sec_uid == sec_uid)
+        if douyin_uid:
+            conditions.append(or_(PublishAccount.douyin_uid == douyin_uid, PublishAccount.account_id == douyin_uid))
+        if conditions:
+            account = db.query(PublishAccount).filter(or_(*conditions)).first()
+        if account is None:
+            account = PublishAccount(
+                name=(result.get("name") or "抖音账号").strip() or "抖音账号",
+                platform="抖音",
+                account_id=douyin_uid,
+                douyin_uid=douyin_uid,
+                sec_uid=sec_uid,
+                avatar=result.get("avatar") or "",
+                status="正常",
+                update_rhythm="日更",
+                owner_id=user_id,
+            )
+            db.add(account)
+            db.flush()
+            created = True
+
+    # 扫码目录（临时 key）直接作为该账号专属登录态保存，后续采集直接复用，
+    # 全程不改名、不删除目录，避免历史残留目录触发批量删除守卫。
+    have_stats = any(int(result.get(f) or 0) for f in ("video_count", "likes_count", "followers_count"))
+    account.douyin_profile = profile_key
+    # 两阶段流程：资料尚未补齐时先标记为同步中，前端显示加载态；登录态本身已有效
+    account.douyin_login_status = "资料同步中" if defer_stats and not have_stats else "已登录"
+    account.douyin_login_at = datetime.now()
+    account.last_synced_at = datetime.now()
+    for field in ("name", "douyin_uid", "sec_uid", "avatar"):
+        value = result.get(field)
+        if value and (created or field != "name" or not account.name):
+            setattr(account, field, value)
+    if not account.account_id and result.get("douyin_uid"):
+        account.account_id = result["douyin_uid"]
+    if result.get("sec_uid") and not account.home_url:
+        account.home_url = f"https://www.douyin.com/user/{result['sec_uid']}"
+
+    # 作品数 / 获赞 / 粉丝：扫码读不到时用该账号登录态补抓一次账号资料。
+    # defer_stats=True 时跳过，交给后台线程 _enrich_login_result 异步补齐。
+    if not have_stats and not defer_stats:
+        _enrich_stats_into(result, account.home_url, profile_key)
+    for field in ("video_count", "likes_count", "followers_count"):
+        value = int(result.get(field) or 0)
+        if value:
+            setattr(account, field, value)
+    account.updated_at = datetime.now()
+    db.commit()
+    db.refresh(account)
+    return {
+        "ok": True,
+        "created": created,
+        "account_id": account.id,
+        "account_name": account.name,
+        "data": result,
+        "owner": user.username if user else "",
+    }
+
+
+def _login_worker(
+    session_id: str,
+    account_id: Optional[int],
+    profile_key: str,
+    user_id: int,
+    holder: dict,
+) -> None:
+    """后台执行无头扫码：回调二维码、轮询登录态，最后写库。"""
+
+    def update(**changes):
+        with _LOGIN_LOCK:
+            session = _LOGIN_SESSIONS.get(session_id)
+            if not session or session.get("status") == "cancelled":
+                return
+            session.update(changes)
+            session["updated_at"] = time.time()
+
+    def on_qr(event: dict):
+        image = (event.get("data") or "").strip()
+        # Node 端优先返回 img.src 原始 data URL；兼容旧的纯 base64 输出。
+        # 注意不要重复套前缀，否则前端拿到双重前缀会显示不出来。
+        qr = image if image.startswith("data:") else (
+            f"data:image/png;base64,{image}" if image else "")
+        with _LOGIN_LOCK:
+            session = _LOGIN_SESSIONS.get(session_id)
+            if not session or session.get("status") == "cancelled":
+                return
+            session["qr_seq"] = int(session.get("qr_seq") or 0) + 1
+            session.update(
+                status="waiting_scan",
+                qr=qr,
+                qr_seq=session["qr_seq"],
+                kind=event.get("kind") or "qr",
+                message="请用手机抖音扫描页面上的二维码",
+                updated_at=time.time(),
+            )
+
+    try:
+        result = login_douyin(
+            profile_key,
+            qr_callback=on_qr,
+            qr_mode=True,
+            proc_holder=holder,
+        )
+    except CollectError as exc:
+        update(
+            status="failed",
+            message=exc.message,
+            manual_hint=exc.manual_hint,
+            need_login=exc.need_login,
+        )
+        return
+    except Exception as exc:
+        update(status="failed", message=f"登录流程失败：{exc}")
+        return
+
+    if not result or not result.get("logged_in"):
+        update(
+            status="failed",
+            need_login=True,
+            message="未获取到抖音登录态，已取消建号",
+            manual_hint="请重新扫码，或改用手动添加",
+        )
+        return
+
+    # 两阶段：先建号、确认登录态，立即推进到 logged_in 让前端关窗；
+    # 耗时的作品/获赞/粉丝补抓交给后台线程，完成后再推进到 success。
+    db = SessionLocal()
+    try:
+        payload = _apply_login_result(db, user_id, account_id, profile_key, result, defer_stats=True)
+    except Exception as exc:
+        update(status="failed", message=f"保存登录态失败：{exc}")
+        return
+    finally:
+        db.close()
+
+    have_stats = any(int((payload.get("data") or {}).get(f) or 0) for f in ("video_count", "likes_count", "followers_count"))
+    if have_stats:
+        # Node 端 readSelfUser 已带齐统计数据，无需补抓，直接完成
+        update(
+            status="success",
+            message="扫码成功，账号资料已同步",
+            result=payload,
+            stats_enrich_failed=False,
+        )
+        return
+
+    update(
+        status="logged_in",
+        message="登录成功，正在同步账号资料…",
+        result=payload,
+        stats_enrich_failed=False,
+    )
+    enrich_payload = dict(payload)
+    enrich_payload["data"] = dict(payload.get("data") or {})
+    home_url = (result.get("home_url") or "").strip() or (
+        f"https://www.douyin.com/user/{result['sec_uid']}" if result.get("sec_uid") else ""
+    )
+    threading.Thread(
+        target=_enrich_login_result,
+        args=(session_id, profile_key, home_url, enrich_payload, update),
+        daemon=True,
+    ).start()
+
+
+@router.post("/login/start", response_model=dict)
+def douyin_login_start(
+    data: DouyinLoginIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """启动远程扫码会话：后端无头打开抖音并把二维码推送到网页。"""
+    if data.account_id:
+        profile_key, _ = _account_profile(db, data.account_id)
+    else:
+        profile_key = new_temp_profile_key()
+
+    session_id = uuid.uuid4().hex
+    now = time.time()
+    holder = {}
+    with _LOGIN_LOCK:
+        for key in list(_LOGIN_SESSIONS):
+            if now - _LOGIN_SESSIONS[key].get("created_at", 0) > _LOGIN_TTL:
+                _LOGIN_SESSIONS.pop(key, None)
+        _LOGIN_SESSIONS[session_id] = {
+            "status": "starting",
+            "created_at": now,
+            "updated_at": now,
+            "account_id": data.account_id,
+            "profile_key": profile_key,
+            "holder": holder,
+            "qr": "",
+            "qr_seq": 0,
+            "kind": "qr",
+            "message": "正在打开抖音登录页（首次加载约需半分钟），请稍候…",
+            "result": None,
+        }
+    threading.Thread(
+        target=_login_worker,
+        args=(session_id, data.account_id, profile_key, user.id, holder),
+        daemon=True,
+    ).start()
+    return {"ok": True, "session": session_id}
+
+
+@router.get("/login/status", response_model=dict)
+def douyin_login_status(
+    session: str,
+    qr_seq: int = -1,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """轮询远程扫码状态；qr 字段是 data URL，同一张图只传一次。"""
+    with _LOGIN_LOCK:
+        state = dict(_LOGIN_SESSIONS.get(session) or {})
+    if not state:
+        raise HTTPException(status_code=404, detail="扫码会话不存在或已过期")
+    current_seq = int(state.get("qr_seq") or 0)
+    return {
+        "ok": state.get("status") == "success",
+        "status": state.get("status"),
+        "qr": state.get("qr") or "" if current_seq != qr_seq else "",
+        "qr_seq": current_seq,
+        "kind": state.get("kind") or "qr",
+        "message": state.get("message") or "",
+        "manual_hint": state.get("manual_hint") or "",
+        "need_login": bool(state.get("need_login")),
+        "stats_enrich_failed": bool(state.get("stats_enrich_failed")),
+        "result": state.get("result"),
+    }
+
+
+@router.post("/login/cancel", response_model=dict)
+def douyin_login_cancel(
+    data: dict,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """关闭弹窗时终止后台扫码进程，避免遗留无头浏览器。"""
+    session_id = str(data.get("session") or "")
+    with _LOGIN_LOCK:
+        state = _LOGIN_SESSIONS.get(session_id)
+        if not state:
+            return {"ok": False, "message": "会话不存在或已结束"}
+        state["status"] = "cancelled"
+        holder = state.get("holder") or {}
+    proc = holder.get("proc")
+    if proc is not None and proc.poll() is None:
+        try:
+            proc.terminate()
+        except Exception:
+            pass
+    return {"ok": True}
+
+
 @router.post("/login", response_model=dict)
 def douyin_login(
     data: DouyinLoginIn,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """打开有头浏览器扫码登录；每个账号的登录态独立保存，后续采集直接复用。
-
-    不传 account_id 时：扫码拿到当前登录用户信息，按 sec_uid / 抖音号匹配已有
-    发布账号并回填；匹配不到则自动新建一个抖音账号。这样页头只需一个扫码入口。
-    """
-    created = False
+    """兼容原同步接口：在服务主机直接弹浏览器窗口扫码。"""
     if data.account_id:
         profile_key, account = _account_profile(db, data.account_id)
     else:
@@ -654,76 +995,7 @@ def douyin_login(
             "message": "未获取到抖音登录态，已取消建号",
             "manual_hint": "请确认部署环境已安装 Node.js / Playwright / Chromium，且后端可打开图形窗口，然后重新扫码",
         }
-
-    # 未指定账号：按扫码得到的信息匹配已有账号，匹配不到则自动建号
-    if account is None:
-        sec_uid = (result.get("sec_uid") or "").strip()
-        douyin_uid = (result.get("douyin_uid") or "").strip()
-        conditions = []
-        if sec_uid:
-            conditions.append(PublishAccount.sec_uid == sec_uid)
-        if douyin_uid:
-            conditions.append(or_(PublishAccount.douyin_uid == douyin_uid, PublishAccount.account_id == douyin_uid))
-        if conditions:
-            account = db.query(PublishAccount).filter(or_(*conditions)).first()
-        if account is None:
-            account = PublishAccount(
-                name=(result.get("name") or "抖音账号").strip() or "抖音账号",
-                platform="抖音",
-                account_id=douyin_uid,
-                douyin_uid=douyin_uid,
-                sec_uid=sec_uid,
-                avatar=result.get("avatar") or "",
-                status="正常",
-                update_rhythm="日更",
-                owner_id=user.id,
-            )
-            db.add(account)
-            db.flush()
-            created = True
-
-    # 扫码目录（临时 key）直接作为该账号专属登录态保存，后续采集直接复用，
-    # 全程不改名、不删除目录，避免历史残留目录触发批量删除守卫。
-    account.douyin_profile = profile_key
-    account.douyin_login_status = "已登录"
-    account.douyin_login_at = datetime.now()
-    account.last_synced_at = datetime.now()
-    for field in ("name", "douyin_uid", "sec_uid", "avatar"):
-        value = result.get(field)
-        if value and (created or field != "name" or not account.name):
-            setattr(account, field, value)
-    if not account.account_id and result.get("douyin_uid"):
-        account.account_id = result["douyin_uid"]
-    if result.get("sec_uid") and not account.home_url:
-        account.home_url = f"https://www.douyin.com/user/{result['sec_uid']}"
-
-    # 作品数 / 获赞 / 粉丝：扫码读不到时用该账号登录态补抓一次账号资料
-    have_stats = any(int(result.get(f) or 0) for f in ("video_count", "likes_count", "followers_count"))
-    if not have_stats:
-        try:
-            query = result.get("sec_uid") or result.get("douyin_uid") or account.home_url
-            if query:
-                # 必须复用本次扫码保存的登录态目录，否则会读不到作品数/获赞/粉丝
-                extra = fetch_account(query, "browser", profile_key=profile_key)
-                for field in ("video_count", "likes_count", "followers_count"):
-                    if int(extra.get(field) or 0):
-                        result[field] = extra[field]
-        except Exception:
-            pass
-    for field in ("video_count", "likes_count", "followers_count"):
-        value = int(result.get(field) or 0)
-        if value:
-            setattr(account, field, value)
-    account.updated_at = datetime.now()
-    db.commit()
-    db.refresh(account)
-    return {
-        "ok": True,
-        "created": created,
-        "account_id": account.id,
-        "account_name": account.name,
-        "data": result,
-    }
+    return _apply_login_result(db, user.id, data.account_id, profile_key, result)
 
 
 @router.post("/config", response_model=dict)

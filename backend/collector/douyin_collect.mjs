@@ -5,10 +5,13 @@
  * 脚本通过 stdin 接收 JSON 参数，结果以最后一行 JSON 输出到 stdout。
  *
  * action:
- * - login    打开有头浏览器供用户扫码 / 过滑块
+ * - login    打开浏览器供用户扫码 / 过滑块（DOYIN_QR_MODE=1 时无头并把二维码回传）
  * - account  按抖音号 / 主页链接取账号资料
  * - videos   按主页链接 / sec_uid 取账号作品列表（播放数据）
  * - video    按作品链接取单条视频数据
+ *
+ * DOYIN_QR_MODE=1 时，登录流程会先输出一行 `__QR__{...}`（base64 图片），
+ * 再输出最终的 JSON 结果；Python 端按行解析即可把二维码推给远程用户。
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -24,6 +27,149 @@ const UA =
 
 function out(obj) {
   process.stdout.write(JSON.stringify(obj) + '\n')
+}
+
+/** 远程扫码：把二维码图片作为独立事件行输出，不干扰最终 JSON 结果 */
+function qrEvent(obj) {
+  process.stdout.write('__QR__' + JSON.stringify(obj) + '\n')
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * 抖音登录弹窗二维码的真实结构（线上实测）：
+ *   <div id="douyin_login_comp_scan_code_qrcode">
+ *     <img src="data:image/png;base64,...">   // 512x512 PNG 原图
+ *   </div>
+ * 直接读取 img.src 就能拿到高清原图，比整页截图清晰得多，也不需要截图等待。
+ */
+const QR_SELECTORS = [
+  '#douyin_login_comp_scan_code_qrcode img',
+  '[id*="qrcode"] img',
+  '[class*="qrcode"] img',
+  '[data-e2e*="qr"] img',
+  'img[src^="data:image"]',
+]
+
+/** 登录弹窗容器：抓不到二维码时只截弹窗，不截整页 */
+const LOGIN_PANEL_SELECTORS = [
+  '#login-panel-new',
+  '[id*="login-panel"]',
+  '[class*="login-panel"]',
+]
+
+function stripDataUrl(src) {
+  return String(src || '').replace(/^data:image\/[A-Za-z0-9.+-]+;base64,/, '')
+}
+
+/**
+ * 一次性 evaluate 扫描所有 frame，直接拿到二维码图片数据。
+ * 刻意不使用 locator.waitFor：抖音弹窗渲染慢，串行 waitFor 每个选择器要等满
+ * 2.5 秒，10 个选择器就是 25 秒，这是之前「20 秒才出图」的根源。
+ */
+async function captureQrImage(page) {
+  for (const frame of page.frames()) {
+    let found = null
+    try {
+      found = await frame.evaluate((selectors) => {
+        const seen = new Set()
+        for (const sel of selectors) {
+          for (const el of document.querySelectorAll(sel)) {
+            if (seen.has(el)) continue
+            seen.add(el)
+            const r = el.getBoundingClientRect()
+            // 过滤小图标和大背景图，只留二维码尺寸范围
+            if (r.width < 60 || r.height < 60 || r.width > 600 || r.height > 600) continue
+            const src = String(el.src || el.getAttribute('src') || '')
+            if (!src) continue
+            if (el.tagName === 'IMG' && /^data:image\//i.test(src)) {
+              return { data: src, source: 'dataurl' }
+            }
+            if (el.tagName === 'IMG' && /^https?:\/\//i.test(src)) {
+              return { data: src, source: 'url' }
+            }
+            if (el.tagName === 'CANVAS') {
+              try {
+                return { data: el.toDataURL('image/png'), source: 'dataurl' }
+              } catch (_) { /* 换下一个元素 */ }
+            }
+          }
+        }
+        return null
+      }, QR_SELECTORS)
+    } catch (_) {
+      continue
+    }
+    if (!found) continue
+
+    // 远程图片：在浏览器里转成 data URL，避开 CORS 与后端二次下载
+    if (found.source === 'url') {
+      const dataUrl = await frame.evaluate(async (url) => {
+        try {
+          const resp = await fetch(url, { mode: 'cors' })
+          const blob = await resp.blob()
+          return await new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(String(reader.result || ''))
+            reader.onerror = () => resolve('')
+            reader.readAsDataURL(blob)
+          })
+        } catch (_) {
+          return ''
+        }
+      }, found.data).catch(() => '')
+      if (dataUrl) found.data = dataUrl
+      else continue
+    }
+    return { data: stripDataUrl(found.data), kind: 'qr', source: found.source }
+  }
+  return null
+}
+
+/** 回退：只截登录弹窗（约 726x483），比整页截图的二维码占比高很多 */
+async function captureLoginPanel(page) {
+  for (const frame of page.frames()) {
+    try {
+      const info = await frame.evaluate((selectors) => {
+        for (const sel of selectors) {
+          const el = document.querySelector(sel)
+          if (!el) continue
+          const r = el.getBoundingClientRect()
+          if (r.width >= 200 && r.height >= 150) return { selector: sel }
+        }
+        return null
+      }, LOGIN_PANEL_SELECTORS)
+      if (!info) continue
+      const buffer = await frame.locator(info.selector).first().screenshot({ timeout: 5000 })
+      if (buffer && buffer.length > 800) {
+        return { data: buffer.toString('base64'), kind: 'page' }
+      }
+    } catch (_) { /* 换下一个 frame */ }
+  }
+  return null
+}
+
+/** 首页默认不展开登录框，点一下「登录」让二维码出现 */
+async function tryOpenLoginModal(page) {
+  for (const frame of page.frames()) {
+    try {
+      const clicked = await frame.evaluate((texts) => {
+        const nodes = [...document.querySelectorAll('button,[role="button"],a')]
+        for (const text of texts) {
+          const el = nodes.find((n) => (n.innerText || '').trim() === text && n.getClientRects().length)
+          if (el) {
+            el.click()
+            return true
+          }
+        }
+        return false
+      }, ['登录', '扫码登录', '立即登录', '登录/注册'])
+      if (clicked) return true
+    } catch (_) {
+      /* 换下一个 frame */
+    }
+  }
+  return false
 }
 
 function readStdin() {
@@ -284,8 +430,40 @@ async function main() {
   try {
     if (action === 'login') {
       await page.goto(payload.url || 'https://www.douyin.com/', { waitUntil: 'domcontentloaded', timeout: 45000 })
+
+      // 远程扫码模式：直接读取二维码 img 的高清原图（512x512）推给网页端。
+      // 抖音登录弹窗通常 10~15 秒才渲染出二维码，每 400ms 扫一次，出现即推送。
+      let lastQr = ''
+      if (process.env.DOYIN_QR_MODE === '1') {
+        let sent = false
+        for (let i = 0; i < 75; i++) {
+          const qr = await captureQrImage(page)
+          if (qr) {
+            qrEvent(qr)
+            lastQr = qr.data
+            sent = true
+            break
+          }
+          if (i % 5 === 0) await tryOpenLoginModal(page)
+          await sleep(400)
+        }
+        if (!sent) {
+          // 抓不到二维码时只截登录弹窗，比 1440x900 整页截图清晰得多
+          const panel = await captureLoginPanel(page)
+          if (panel) qrEvent(panel)
+          else {
+            try {
+              const buffer = await page.screenshot({ timeout: 10000 })
+              qrEvent({ data: buffer.toString('base64'), kind: 'page' })
+            } catch (_) {
+              /* 截图失败不影响后续登录态轮询 */
+            }
+          }
+        }
+      }
+
       // 轮询登录 Cookie：用户扫码成功后自动结束，无需手动关闭窗口。
-      // 登录态会持久化到该账号专属目录，供后续采集直接复用。
+      // 二维码会过期，等待期间持续检测刷新并推送新图，避免用户扫到失效的码。
       let logged = false
       for (let i = 0; i < 170; i++) {
         try {
@@ -295,14 +473,23 @@ async function main() {
           break
         }
         if (logged || page.isClosed()) break
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        if (process.env.DOYIN_QR_MODE === '1' && lastQr && i % 5 === 0) {
+          const fresh = await captureQrImage(page)
+          if (fresh && fresh.data !== lastQr) {
+            qrEvent(fresh)
+            lastQr = fresh.data
+          }
+        }
+        await sleep(1000)
       }
       if (!logged) {
         out({
           ok: false,
           need_login: true,
-          message: '未检测到登录态，请在浏览器中完成扫码登录',
-          manual_hint: '重新点击「扫码登录」，完成扫码后等待页面自动跳转，窗口会自行关闭',
+          message: '未检测到登录态，请在页面中完成扫码登录',
+          manual_hint: process.env.DOYIN_QR_MODE === '1'
+            ? '请用手机抖音扫描页面上的二维码；若超时可重新点击「扫码登录」或改用手动添加'
+            : '重新点击「扫码登录」，完成扫码后等待页面自动跳转，窗口会自行关闭',
         })
         return
       }

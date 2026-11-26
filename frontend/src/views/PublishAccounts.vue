@@ -118,7 +118,8 @@
 
           <el-table-column label="作品数量" min-width="104" align="right">
             <template #default="{ row }">
-              <span class="delta-value">
+              <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
+              <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ row.video_count || 0 }}</span>
                 <span v-if="deltaOf(row, 'video_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'video_count'))">
                   {{ deltaText(deltaOf(row, 'video_count')) }}
@@ -129,7 +130,8 @@
 
           <el-table-column label="获赞" min-width="108" align="right">
             <template #default="{ row }">
-              <span class="delta-value">
+              <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
+              <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ formatCount(row.likes_count) }}</span>
                 <span v-if="deltaOf(row, 'likes_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'likes_count'))">
                   {{ deltaText(deltaOf(row, 'likes_count')) }}
@@ -140,7 +142,8 @@
 
           <el-table-column label="粉丝" min-width="108" align="right">
             <template #default="{ row }">
-              <span class="delta-value">
+              <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
+              <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ formatCount(row.followers_count) }}</span>
                 <span v-if="deltaOf(row, 'followers_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'followers_count'))">
                   {{ deltaText(deltaOf(row, 'followers_count')) }}
@@ -360,6 +363,47 @@
       </div>
     </el-dialog>
 
+    <!-- 远程扫码：服务端无头浏览器抓二维码回传，局域网用户直接扫页面 -->
+    <el-dialog
+      v-model="qrVisible"
+      title="抖音扫码登录"
+      width="430px"
+      class="edit-dialog"
+      :close-on-click-modal="false"
+      destroy-on-close
+      @closed="cancelQrLogin"
+    >
+      <div class="remote-qr-body">
+        <div v-if="qrImage" class="remote-qr-image-wrap">
+          <el-image
+            v-if="qrKind === 'page'"
+            :src="qrImage"
+            :preview-src-list="[qrImage]"
+            preview-teleported
+            fit="contain"
+            class="remote-qr-image is-page"
+            alt="抖音登录弹窗截图（点击可放大）"
+          />
+          <img v-else :src="qrImage" class="remote-qr-image" alt="抖音登录二维码" />
+          <div v-if="qrKind === 'page'" class="remote-qr-warning">
+            未能直接提取二维码，当前显示登录弹窗截图。请点击图片放大后按页面提示扫码，或改用手动添加。
+          </div>
+          <div v-else class="remote-qr-ready">
+            高清二维码已就绪<span v-if="qrSeq > 1"> · 已自动刷新 {{ qrSeq - 1 }} 次</span>
+          </div>
+        </div>
+        <div v-else class="remote-qr-loading">
+          <el-icon class="is-loading"><Connection /></el-icon>
+          <span>{{ qrMessage || '正在打开抖音登录页…' }}</span>
+          <span class="remote-qr-loading-sub">已等待 {{ qrElapsed }} 秒，二维码生成后会自动显示</span>
+        </div>
+        <div class="remote-qr-status">{{ qrMessage }}</div>
+        <div class="remote-qr-hint">
+          请用手机抖音 App 扫描上方二维码。登录态保存在服务器上，扫码成功后本窗口会自动关闭。
+        </div>
+      </div>
+    </el-dialog>
+
     <!-- 删除确认 -->
     <ConfirmDialog
       v-model="confirmVisible"
@@ -404,6 +448,17 @@ const confirmVisible = ref(false)
 const removing = ref(null)
 const creatorOptions = ref([])
 const loggingId = ref(null)       // 扫码登录中（null 表示空闲）
+const qrVisible = ref(false)
+const qrSession = ref('')
+const qrImage = ref('')
+const qrSeq = ref(0)
+const qrKind = ref('qr')
+const qrMessage = ref('')
+const qrTimer = ref(null)
+const qrElapsed = ref(0)
+let qrElapsedTimer = null
+// 登录已确认、弹窗已关闭，但后台仍在补抓资料：此时轮询继续，且不触发 cancel
+const qrSyncing = ref(false)
 const updatingId = ref(null)      // 行内更新中
 const snapshotVisible = ref(false)
 const snapshotLoading = ref(false)
@@ -433,17 +488,24 @@ function isDouyinAccount(row) {
   return pf.includes('抖音') || !!(row.douyin_uid || row.home_url)
 }
 
+// 扫码后资料异步补齐期间：登录态已生效，但数据尚未同步
+function isSyncing(row) {
+  return row.douyin_login_status === '资料同步中'
+}
+
 // 状态只看在线 / 离线：抖音账号看登录态，其他账号看业务状态
 function isOnline(row) {
-  if (isDouyinAccount(row)) return row.douyin_login_status === '已登录'
+  if (isDouyinAccount(row)) return row.douyin_login_status === '已登录' || isSyncing(row)
   return (row.status || '正常') === '正常'
 }
 
 function onlineStatusType(row) {
+  if (isSyncing(row)) return 'warning'
   return isOnline(row) ? 'success' : 'danger'
 }
 
 function onlineLabel(row) {
+  if (isSyncing(row)) return '同步中'
   return isOnline(row) ? '在线' : '离线'
 }
 
@@ -648,23 +710,123 @@ async function doVideoCreate() {
   }
 }
 
-// 抖音扫码登录：后端按登录用户自动建号或回填已有账号
-async function loginNewAccount() {
-  loggingId.value = -1
-  ElMessage.info('正在打开抖音登录窗口，请扫码并等待页面自动完成')
+// 远程扫码：后端无头浏览器抓二维码，前端弹窗展示并轮询结果
+function clearQrTimer() {
+  if (qrTimer.value) {
+    clearInterval(qrTimer.value)
+    qrTimer.value = null
+  }
+  if (qrElapsedTimer) {
+    clearInterval(qrElapsedTimer)
+    qrElapsedTimer = null
+  }
+}
+
+async function cancelQrLogin() {
+  // 登录已成功、仅因联机补抓数据而关窗：会话在后台继续，不能取消
+  if (qrSyncing.value) return
+  clearQrTimer()
+  const session = qrSession.value
+  qrSession.value = ''
+  qrImage.value = ''
+  if (session) {
+    try { await api.post('/douyin/login/cancel', { session }) } catch (_) { /* 忽略 */ }
+  }
+}
+
+async function startRemoteLogin(accountId) {
+  clearQrTimer()
+  qrSyncing.value = false
+  qrImage.value = ''
+  qrSeq.value = 0
+  qrKind.value = 'qr'
+  qrMessage.value = '正在连接抖音登录页（首次约需 10~20 秒），请稍候…'
+  qrElapsed.value = 0
+  qrVisible.value = true
+  if (qrElapsedTimer) clearInterval(qrElapsedTimer)
+  qrElapsedTimer = setInterval(() => { qrElapsed.value += 1 }, 1000)
   try {
-    const { data } = await api.post('/douyin/login', {}, { timeout: 200000 })
-    if (!data.ok) {
-      ElMessage.warning({
-        message: [data.message || '未检测到登录态，请重试', data.manual_hint].filter(Boolean).join('｜'),
-        duration: 8000,
-      })
+    const { data } = await api.post('/douyin/login/start', accountId ? { account_id: accountId } : {})
+    if (!data.ok) throw new Error(data.message || '启动扫码失败')
+    qrSession.value = data.session
+  } catch (e) {
+    qrVisible.value = false
+    ElMessage.error(e.response?.data?.detail || e.message || '启动扫码失败')
+    return
+  }
+  qrTimer.value = setInterval(pollRemoteLogin, 800)
+  pollRemoteLogin()
+}
+
+async function pollRemoteLogin() {
+  const session = qrSession.value
+  // qrSyncing 时弹窗已关，但后台仍在补抓资料，需继续轮询
+  if (!session || (!qrVisible.value && !qrSyncing.value)) {
+    clearQrTimer()
+    return
+  }
+  try {
+    const { data } = await api.get('/douyin/login/status', { params: { session, qr_seq: qrSeq.value } })
+    if (data.qr) {
+      qrImage.value = data.qr
+      qrSeq.value = Number(data.qr_seq || 0)
+      if (qrElapsedTimer) { clearInterval(qrElapsedTimer); qrElapsedTimer = null }
+    }
+    qrKind.value = data.kind || 'qr'
+    qrMessage.value = data.message || ''
+
+    // 阶段一：登录态已确认，立即关窗；账号行先显示「同步中」，轮询继续等补抓结果
+    if (data.status === 'logged_in') {
+      qrSyncing.value = true
+      qrVisible.value = false
+      const result = data.result || {}
+      ElMessage.success(result.created ? '登录成功，正在同步账号资料…' : `登录成功，正在更新「${result.account_name || ''}」的资料…`)
+      if (qrElapsedTimer) { clearInterval(qrElapsedTimer); qrElapsedTimer = null }
+      await load()
       return
     }
-    ElMessage.success(data.created ? '扫码成功，已新建账号' : `扫码成功，已更新账号「${data.account_name || ''}」`)
-    await load()
+
+    if (data.status === 'success') {
+      clearQrTimer()
+      qrSyncing.value = false
+      qrVisible.value = false
+      const result = data.result || {}
+      await load()
+      if (data.stats_enrich_failed) {
+        ElMessage.warning({
+          message: '登录成功，但账号资料同步失败，可点击该账号的「更新」按钮重试',
+          duration: 8000,
+        })
+      } else {
+        ElMessage.success(result.created ? '扫码成功，已新建账号' : `扫码成功，已更新账号「${result.account_name || ''}」`)
+      }
+      qrSession.value = ''
+      return
+    }
+    if (data.status === 'failed') {
+      clearQrTimer()
+      qrSyncing.value = false
+      qrVisible.value = false
+      ElMessage.warning({
+        message: [data.message || '扫码失败', data.manual_hint].filter(Boolean).join('｜'),
+        duration: 8000,
+      })
+      qrSession.value = ''
+    }
   } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '打开登录窗口失败')
+    clearQrTimer()
+    qrSyncing.value = false
+    qrVisible.value = false
+    ElMessage.error(e.response?.data?.detail || '扫码状态查询失败')
+  }
+}
+
+// 抖音扫码登录：后端按登录用户自动建号或回填已有账号
+async function loginNewAccount() {
+  if (loggingId.value !== null) return
+  loggingId.value = -1
+  try {
+    await startRemoteLogin()
   } finally {
     loggingId.value = null
   }
@@ -674,20 +836,8 @@ async function loginNewAccount() {
 async function loginAccount(row) {
   if (loggingId.value !== null) return
   loggingId.value = row.id
-  ElMessage.info(`正在打开「${row.name}」的抖音登录窗口，请扫码`)
   try {
-    const { data } = await api.post('/douyin/login', { account_id: row.id }, { timeout: 200000 })
-    if (!data.ok) {
-      ElMessage.warning({
-        message: [data.message || '未检测到登录态，请重试', data.manual_hint].filter(Boolean).join('｜'),
-        duration: 8000,
-      })
-    } else {
-      ElMessage.success('登录态已保存')
-    }
-    await load()
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '打开登录窗口失败')
+    await startRemoteLogin(row.id)
   } finally {
     loggingId.value = null
   }
@@ -835,7 +985,10 @@ onMounted(async () => {
   load()
   document.addEventListener('click', onDocClick)
 })
-onUnmounted(() => document.removeEventListener('click', onDocClick))
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick)
+  clearQrTimer()
+})
 </script>
 
 <style scoped>
@@ -919,6 +1072,77 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
   font-size: 12.5px;
   min-height: 44px !important;
   box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+.remote-qr-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0 8px;
+}
+.remote-qr-image-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.remote-qr-image {
+  width: 260px;
+  height: 260px;
+  object-fit: contain;
+  padding: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 8px;
+  background: #fff;
+}
+.remote-qr-image.is-page {
+  width: 100%;
+  height: 210px;
+  cursor: zoom-in;
+}
+.remote-qr-ready {
+  font-size: 12px;
+  color: var(--el-color-success);
+  text-align: center;
+}
+.remote-qr-loading-sub {
+  font-size: 12px;
+  color: var(--adm-text-secondary, #94a3b8);
+}
+.remote-qr-warning {
+  max-width: 320px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--el-color-warning);
+  text-align: center;
+}
+.remote-qr-loading {
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--adm-text-secondary);
+  font-size: 13px;
+}
+.remote-qr-status { font-size: 13px; color: var(--adm-text-main, #334155); }
+.adm-cell-num.is-syncing {
+  color: #b8860b;
+  font-size: 12px;
+  font-weight: 400;
+  animation: sync-pulse 1.4s ease-in-out infinite;
+}
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+.remote-qr-hint {
+  max-width: 340px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--adm-text-secondary);
+  text-align: center;
 }
 </style>
 
