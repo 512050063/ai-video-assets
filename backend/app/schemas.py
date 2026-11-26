@@ -757,6 +757,7 @@ class DouyinImportVideoIn(BaseModel):
     comments: int = 0
     shares: int = 0
     create_time: Optional[int] = None   # 作品发布时间（秒级时间戳）
+    duration: Optional[float] = None    # 作品时长（秒，抖音视频自身数据）
     account_id: Optional[int] = None    # 归属的发布账号
     account_name: str = ""
     data_status: str = "正常"           # 正常 / 隐藏 / 删除（隐藏作品手工录入时用）
@@ -787,6 +788,7 @@ class DouyinImportItemOut(BaseModel):
     comments: int = 0
     shares: int = 0
     create_time: Optional[int] = None
+    duration: Optional[float] = None
     account_id: Optional[int] = None
     account_name: str = ""
     status: str = "待匹配"

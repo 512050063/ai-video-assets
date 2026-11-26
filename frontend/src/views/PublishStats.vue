@@ -425,8 +425,9 @@
             </div>
             <div class="auto-nums">
               播放 {{ formatCount(v.plays) }} · 点赞 {{ formatCount(v.likes) }} · 评论 {{ formatCount(v.comments) }} · 转发 {{ formatCount(v.shares) }}
-        <span v-if="v.create_time"> · {{ formatDateTime(v.create_time * 1000) }}</span>
-      </div>
+              <span v-if="v.duration"> · 时长 {{ Number(v.duration).toFixed(1) }}S</span>
+              <span v-if="v.create_time"> · {{ formatDateTime(v.create_time * 1000) }}</span>
+            </div>
             <div class="auto-tags">
               <TagCell :tags="v.tags || []" />
             </div>
@@ -973,6 +974,7 @@ function videoToImport(v) {
     comments: v.comments || 0,
     shares: v.shares || 0,
     create_time: v.create_time || null,
+    duration: v.duration || null,
     account_id: v.account_id || null,
     account_name: v.account_name || ''
   }

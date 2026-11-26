@@ -482,6 +482,7 @@ class DouyinImport(Base):
     comments = Column(Integer, default=0)
     shares = Column(Integer, default=0)
     create_time = Column(Integer, nullable=True)  # 作品发布时间（秒级时间戳）
+    duration = Column(Float, nullable=True)  # 作品时长（秒，抖音视频自身数据）
     account_id = Column(Integer, nullable=True)
     account_name = Column(String(100), default="")
     status = Column(String(20), default="待匹配", index=True)  # 待匹配 / 已匹配

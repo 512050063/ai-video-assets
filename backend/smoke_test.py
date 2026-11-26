@@ -1363,7 +1363,8 @@ def run():
             def _fake_videos(query, limit, profile_key=None):
                 return {"videos": [{"video_id": vid, "title": PREFIX + "同步作品",
                                     "tags": [PREFIX + "同步标签"], "plays": 123, "likes": 45,
-                                    "comments": 6, "shares": 7, "cover": ""}]}
+                                    "comments": 6, "shares": 7, "cover": "",
+                                    "duration": 63.5, "create_time": 1730000000}]}
 
             dc.fetch_account = _fake_acc
             dc._sync_account.__globals__["fetch_account"] = _fake_acc
@@ -1374,6 +1375,19 @@ def run():
                {k: v for k, v in res.items() if k != "account"})
             ok("手动更新写入发布数据", s.query(DouyinImport).filter(
                 DouyinImport.video_id == vid, DouyinImport.account_id == test_acc.id).count() == 1)
+            synced_row = s.query(DouyinImport).filter(DouyinImport.video_id == vid).first()
+            ok("采集作品时长写入抖音视频自身字段",
+               synced_row is not None and synced_row.duration == 63.5,
+               getattr(synced_row, "duration", None))
+            # 发布数据表摘要：采集行的标签/时长来自抖音作品，不回退关联创作记录
+            code, sm = req("GET", "/publish-stats/summary")
+            sm_row = next((x for x in (sm.get("items") or []) if x.get("video_id") == vid), None) \
+                if isinstance(sm, dict) else None
+            ok("发布数据摘要标签取抖音作品自身", sm_row is not None
+               and PREFIX + "同步标签" in (sm_row.get("tags") or []),
+               (sm_row or {}).get("tags"))
+            ok("发布数据摘要时长取抖音作品自身", sm_row is not None
+               and sm_row.get("duration") == 63.5, (sm_row or {}).get("duration"))
             ok("手动更新同时写账号快照", s.query(PublishAccountSnapshot).filter(
                 PublishAccountSnapshot.account_id == test_acc.id).count() == before_snap + 1)
             snap_latest = s.query(PublishAccountSnapshot).filter(

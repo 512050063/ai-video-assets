@@ -35,6 +35,15 @@ def _int(value, default: int = 0) -> int:
         return default
 
 
+def _float(value):
+    """采集作品的时长（秒）：非法或为 0 时留空，不伪造数据。"""
+    try:
+        v = float(value or 0)
+        return round(v, 1) if v > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _is_douyin_account(account: PublishAccount) -> bool:
     platform = (account.platform or "").strip()
     return (
@@ -176,6 +185,7 @@ def _sync_publish_videos(
             "comments": _int(raw.get("comments")),
             "shares": _int(raw.get("shares")),
             "create_time": raw.get("create_time"),
+            "duration": _float(raw.get("duration")),
         })
 
     if not prepared:
@@ -206,6 +216,7 @@ def _sync_publish_videos(
             row.likes = item["likes"]
             row.comments = item["comments"]
             row.shares = item["shares"]
+            row.duration = item["duration"]
             if item["create_time"] is not None:
                 try:
                     row.create_time = int(item["create_time"])
@@ -231,6 +242,7 @@ def _sync_publish_videos(
                 comments=item["comments"],
                 shares=item["shares"],
                 create_time=create_time,
+                duration=item["duration"],
                 account_id=account.id,
                 account_name=account.name,
                 status="待匹配",

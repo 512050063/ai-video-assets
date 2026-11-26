@@ -291,6 +291,8 @@ def run_migrations():
         # 抖音采集作品直接显示在发布数据表：记录状态字段与话题标签
         _add_column(conn, "douyin_imports", "data_status", "VARCHAR(20) DEFAULT '正常'")
         _add_column(conn, "douyin_imports", "tags", "JSON DEFAULT '[]'")
+        # 抖音视频自身时长（秒），采集自作品详情，不取关联创作记录
+        _add_column(conn, "douyin_imports", "duration", "FLOAT")
 
         # 抖音作品待匹配池：按作品 ID 去重索引（表由 create_all 建立）
         if _table_exists(conn, "douyin_imports"):

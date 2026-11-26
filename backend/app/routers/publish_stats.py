@@ -262,8 +262,8 @@ def summary(
             "title": r.title or "未命名作品",
             "cover": r.cover or "",
             "reference_title": (prod.title if prod else "") or "",
-            # 话题标签来自抖音作品描述，不随创作记录的参考标签覆盖
-            "tags": list(r.tags or []) or (list(prod.tags or []) if prod else []),
+            # 话题标签与时长均取抖音已发布视频自身的采集数据，不回退到关联创作记录
+            "tags": list(r.tags or []),
             "video_file": (prod.video_file or "") if prod else "",
             "category_id": (prod.category_id if prod else None),
             "category_name": (prod.category.name if prod and prod.category else None),
@@ -276,7 +276,7 @@ def summary(
             "published_at": published_at or (prod.published_at if prod else None),
             "published_url": (prod.published_url if prod else "") or "",
             "owner_name": owner_name,
-            "duration": (prod.duration if prod else None),
+            "duration": r.duration,
             "source": "auto",
             "account": r.account_name or (acc.name if acc else ""),
             "recorded_at": (stat.recorded_at if stat else None),
@@ -544,6 +544,7 @@ def import_douyin_videos(
             row.comments = max(0, v.comments)
             row.shares = max(0, v.shares)
             row.create_time = v.create_time
+            row.duration = v.duration
             row.account_id = v.account_id
             row.account_name = v.account_name or ""
             if v.data_status:
@@ -562,6 +563,7 @@ def import_douyin_videos(
                 comments=max(0, v.comments),
                 shares=max(0, v.shares),
                 create_time=v.create_time,
+                duration=v.duration,
                 account_id=v.account_id,
                 account_name=(v.account_name or "").strip(),
                 status="待匹配",
