@@ -42,7 +42,7 @@
       <GridSkeleton v-if="loading" :rows="8" :cols="6" />
       <div class="adm-table-wrap">
         <el-table :data="pagedList" stripe style="width: 100%" empty-text="还没有创意，点右上角「收集创意」开始">
-          <el-table-column label="封面" width="72" align="center">
+          <el-table-column label="封面" width="88" align="center">
             <template #default="{ row }">
               <div class="adm-cell-cover">
                 <img v-if="row.cover" :src="row.cover" class="adm-cover-thumb" :alt="row.title" />
@@ -292,7 +292,7 @@
               :src="dialog.form.cover"
               mode="single"
               shape="square"
-              :size="132"
+              :size="100"
               @update:src="(url) => (dialog.form.cover = url)"
             />
             <span class="cover-tip">解析链接时自动获取封面，也可手动上传替换</span>
@@ -1006,6 +1006,13 @@ watch(() => route.query.keyword, (kw) => {
 </script>
 
 <style scoped>
+
+/* 创意灵感表格封面放大（全局默认 44px，仅本页覆盖，不影响发布数据/视频创作） */
+.adm-cell-cover :deep(.adm-cover-thumb) {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+}
 
 /* 视频名称第二行：作者 + 类别 */
 .idea-author {
