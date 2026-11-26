@@ -118,7 +118,8 @@
 
           <el-table-column label="作品数量" min-width="104" align="right">
             <template #default="{ row }">
-              <span class="delta-value">
+              <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
+              <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ row.video_count || 0 }}</span>
                 <span v-if="deltaOf(row, 'video_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'video_count'))">
                   {{ deltaText(deltaOf(row, 'video_count')) }}
@@ -129,7 +130,8 @@
 
           <el-table-column label="获赞" min-width="108" align="right">
             <template #default="{ row }">
-              <span class="delta-value">
+              <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
+              <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ formatCount(row.likes_count) }}</span>
                 <span v-if="deltaOf(row, 'likes_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'likes_count'))">
                   {{ deltaText(deltaOf(row, 'likes_count')) }}
@@ -140,7 +142,8 @@
 
           <el-table-column label="粉丝" min-width="108" align="right">
             <template #default="{ row }">
-              <span class="delta-value">
+              <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
+              <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ formatCount(row.followers_count) }}</span>
                 <span v-if="deltaOf(row, 'followers_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'followers_count'))">
                   {{ deltaText(deltaOf(row, 'followers_count')) }}
@@ -454,6 +457,8 @@ const qrMessage = ref('')
 const qrTimer = ref(null)
 const qrElapsed = ref(0)
 let qrElapsedTimer = null
+// 登录已确认、弹窗已关闭，但后台仍在补抓资料：此时轮询继续，且不触发 cancel
+const qrSyncing = ref(false)
 const updatingId = ref(null)      // 行内更新中
 const snapshotVisible = ref(false)
 const snapshotLoading = ref(false)
@@ -483,17 +488,24 @@ function isDouyinAccount(row) {
   return pf.includes('抖音') || !!(row.douyin_uid || row.home_url)
 }
 
+// 扫码后资料异步补齐期间：登录态已生效，但数据尚未同步
+function isSyncing(row) {
+  return row.douyin_login_status === '资料同步中'
+}
+
 // 状态只看在线 / 离线：抖音账号看登录态，其他账号看业务状态
 function isOnline(row) {
-  if (isDouyinAccount(row)) return row.douyin_login_status === '已登录'
+  if (isDouyinAccount(row)) return row.douyin_login_status === '已登录' || isSyncing(row)
   return (row.status || '正常') === '正常'
 }
 
 function onlineStatusType(row) {
+  if (isSyncing(row)) return 'warning'
   return isOnline(row) ? 'success' : 'danger'
 }
 
 function onlineLabel(row) {
+  if (isSyncing(row)) return '同步中'
   return isOnline(row) ? '在线' : '离线'
 }
 
@@ -711,6 +723,8 @@ function clearQrTimer() {
 }
 
 async function cancelQrLogin() {
+  // 登录已成功、仅因联机补抓数据而关窗：会话在后台继续，不能取消
+  if (qrSyncing.value) return
   clearQrTimer()
   const session = qrSession.value
   qrSession.value = ''
@@ -722,6 +736,7 @@ async function cancelQrLogin() {
 
 async function startRemoteLogin(accountId) {
   clearQrTimer()
+  qrSyncing.value = false
   qrImage.value = ''
   qrSeq.value = 0
   qrKind.value = 'qr'
@@ -745,7 +760,8 @@ async function startRemoteLogin(accountId) {
 
 async function pollRemoteLogin() {
   const session = qrSession.value
-  if (!session || !qrVisible.value) {
+  // qrSyncing 时弹窗已关，但后台仍在补抓资料，需继续轮询
+  if (!session || (!qrVisible.value && !qrSyncing.value)) {
     clearQrTimer()
     return
   }
@@ -758,17 +774,38 @@ async function pollRemoteLogin() {
     }
     qrKind.value = data.kind || 'qr'
     qrMessage.value = data.message || ''
-    if (data.status === 'success') {
-      clearQrTimer()
+
+    // 阶段一：登录态已确认，立即关窗；账号行先显示「同步中」，轮询继续等补抓结果
+    if (data.status === 'logged_in') {
+      qrSyncing.value = true
       qrVisible.value = false
       const result = data.result || {}
-      ElMessage.success(result.created ? '扫码成功，已新建账号' : `扫码成功，已更新账号「${result.account_name || ''}」`)
-      qrSession.value = ''
+      ElMessage.success(result.created ? '登录成功，正在同步账号资料…' : `登录成功，正在更新「${result.account_name || ''}」的资料…`)
+      if (qrElapsedTimer) { clearInterval(qrElapsedTimer); qrElapsedTimer = null }
       await load()
+      return
+    }
+
+    if (data.status === 'success') {
+      clearQrTimer()
+      qrSyncing.value = false
+      qrVisible.value = false
+      const result = data.result || {}
+      await load()
+      if (data.stats_enrich_failed) {
+        ElMessage.warning({
+          message: '登录成功，但账号资料同步失败，可点击该账号的「更新」按钮重试',
+          duration: 8000,
+        })
+      } else {
+        ElMessage.success(result.created ? '扫码成功，已新建账号' : `扫码成功，已更新账号「${result.account_name || ''}」`)
+      }
+      qrSession.value = ''
       return
     }
     if (data.status === 'failed') {
       clearQrTimer()
+      qrSyncing.value = false
       qrVisible.value = false
       ElMessage.warning({
         message: [data.message || '扫码失败', data.manual_hint].filter(Boolean).join('｜'),
@@ -778,6 +815,7 @@ async function pollRemoteLogin() {
     }
   } catch (e) {
     clearQrTimer()
+    qrSyncing.value = false
     qrVisible.value = false
     ElMessage.error(e.response?.data?.detail || '扫码状态查询失败')
   }
@@ -1089,6 +1127,16 @@ onUnmounted(() => {
   font-size: 13px;
 }
 .remote-qr-status { font-size: 13px; color: var(--adm-text-main, #334155); }
+.adm-cell-num.is-syncing {
+  color: #b8860b;
+  font-size: 12px;
+  font-weight: 400;
+  animation: sync-pulse 1.4s ease-in-out infinite;
+}
+@keyframes sync-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
 .remote-qr-hint {
   max-width: 340px;
   font-size: 12.5px;

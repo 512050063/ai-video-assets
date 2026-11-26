@@ -622,14 +622,77 @@ def create_account_from_video(
     }
 
 
+def _enrich_stats_into(result: dict, home_url: str, profile_key: str) -> bool:
+    """用账号登录态补抓作品/获赞/粉丝，写入 result。返回是否拿到有效数据。"""
+    query = (result.get("sec_uid") or result.get("douyin_uid") or home_url or "").strip()
+    if not query:
+        return False
+    try:
+        extra = fetch_account(query, "browser", profile_key=profile_key)
+    except Exception:
+        return False
+    got = False
+    for field in ("video_count", "likes_count", "followers_count"):
+        value = int(extra.get(field) or 0)
+        if value:
+            result[field] = value
+            got = True
+    return got
+
+
+def _enrich_login_result(
+    session_id: str,
+    profile_key: str,
+    home_url: str,
+    payload: dict,
+    update_fn,
+) -> None:
+    """后台线程：登录确认后补抓统计数据，更新账号并推进会话到 success。
+
+    补抓失败不会影响登录态：账号保持已登录、数据为 0，
+    会话带 stats_enrich_failed 标记，前端提示用户点「更新」按钮重试。
+    保持 payload 外层结构（created/account_name）不变，供前端成功提示使用。
+    """
+    data = payload.setdefault("data", {})
+    enriched = _enrich_stats_into(data, home_url, profile_key)
+    if enriched:
+        db = SessionLocal()
+        try:
+            account_id = payload.get("account_id")
+            account = db.query(PublishAccount).get(account_id) if account_id else None
+            if account:
+                for field in ("video_count", "likes_count", "followers_count"):
+                    value = int(data.get(field) or 0)
+                    if value:
+                        setattr(account, field, value)
+                account.douyin_login_status = "已登录"
+                account.updated_at = datetime.now()
+                db.commit()
+        except Exception:
+            pass
+        finally:
+            db.close()
+    update_fn(
+        status="success",
+        message="扫码成功，账号资料已同步" if enriched else "扫码成功，但账号资料同步失败，可点击「更新」按钮重试",
+        result=payload,
+        stats_enrich_failed=not enriched,
+    )
+
+
 def _apply_login_result(
     db: Session,
     user_id: int,
     account_id: Optional[int],
     profile_key: str,
     result: dict,
+    defer_stats: bool = False,
 ) -> dict:
-    """扫码成功后匹配/新建账号并回填资料；同步与异步入口共用。"""
+    """扫码成功后匹配/新建账号并回填资料；同步与异步入口共用。
+
+    defer_stats=True 时跳过耗时的统计补抓（由后台线程稍后完成），
+    用于远程扫码「先关窗、后补数据」的两阶段流程。
+    """
     user = db.query(User).get(user_id)
     created = False
     if account_id:
@@ -665,8 +728,10 @@ def _apply_login_result(
 
     # 扫码目录（临时 key）直接作为该账号专属登录态保存，后续采集直接复用，
     # 全程不改名、不删除目录，避免历史残留目录触发批量删除守卫。
+    have_stats = any(int(result.get(f) or 0) for f in ("video_count", "likes_count", "followers_count"))
     account.douyin_profile = profile_key
-    account.douyin_login_status = "已登录"
+    # 两阶段流程：资料尚未补齐时先标记为同步中，前端显示加载态；登录态本身已有效
+    account.douyin_login_status = "资料同步中" if defer_stats and not have_stats else "已登录"
     account.douyin_login_at = datetime.now()
     account.last_synced_at = datetime.now()
     for field in ("name", "douyin_uid", "sec_uid", "avatar"):
@@ -678,18 +743,10 @@ def _apply_login_result(
     if result.get("sec_uid") and not account.home_url:
         account.home_url = f"https://www.douyin.com/user/{result['sec_uid']}"
 
-    # 作品数 / 获赞 / 粉丝：扫码读不到时用该账号登录态补抓一次账号资料
-    have_stats = any(int(result.get(f) or 0) for f in ("video_count", "likes_count", "followers_count"))
-    if not have_stats:
-        try:
-            query = result.get("sec_uid") or result.get("douyin_uid") or account.home_url
-            if query:
-                extra = fetch_account(query, "browser", profile_key=profile_key)
-                for field in ("video_count", "likes_count", "followers_count"):
-                    if int(extra.get(field) or 0):
-                        result[field] = extra[field]
-        except Exception:
-            pass
+    # 作品数 / 获赞 / 粉丝：扫码读不到时用该账号登录态补抓一次账号资料。
+    # defer_stats=True 时跳过，交给后台线程 _enrich_login_result 异步补齐。
+    if not have_stats and not defer_stats:
+        _enrich_stats_into(result, account.home_url, profile_key)
     for field in ("video_count", "likes_count", "followers_count"):
         value = int(result.get(field) or 0)
         if value:
@@ -772,15 +829,44 @@ def _login_worker(
         )
         return
 
+    # 两阶段：先建号、确认登录态，立即推进到 logged_in 让前端关窗；
+    # 耗时的作品/获赞/粉丝补抓交给后台线程，完成后再推进到 success。
     db = SessionLocal()
     try:
-        payload = _apply_login_result(db, user_id, account_id, profile_key, result)
+        payload = _apply_login_result(db, user_id, account_id, profile_key, result, defer_stats=True)
     except Exception as exc:
         update(status="failed", message=f"保存登录态失败：{exc}")
         return
     finally:
         db.close()
-    update(status="success", message="扫码成功", result=payload)
+
+    have_stats = any(int((payload.get("data") or {}).get(f) or 0) for f in ("video_count", "likes_count", "followers_count"))
+    if have_stats:
+        # Node 端 readSelfUser 已带齐统计数据，无需补抓，直接完成
+        update(
+            status="success",
+            message="扫码成功，账号资料已同步",
+            result=payload,
+            stats_enrich_failed=False,
+        )
+        return
+
+    update(
+        status="logged_in",
+        message="登录成功，正在同步账号资料…",
+        result=payload,
+        stats_enrich_failed=False,
+    )
+    enrich_payload = dict(payload)
+    enrich_payload["data"] = dict(payload.get("data") or {})
+    home_url = (result.get("home_url") or "").strip() or (
+        f"https://www.douyin.com/user/{result['sec_uid']}" if result.get("sec_uid") else ""
+    )
+    threading.Thread(
+        target=_enrich_login_result,
+        args=(session_id, profile_key, home_url, enrich_payload, update),
+        daemon=True,
+    ).start()
 
 
 @router.post("/login/start", response_model=dict)
@@ -845,6 +931,7 @@ def douyin_login_status(
         "message": state.get("message") or "",
         "manual_hint": state.get("manual_hint") or "",
         "need_login": bool(state.get("need_login")),
+        "stats_enrich_failed": bool(state.get("stats_enrich_failed")),
         "result": state.get("result"),
     }
 
