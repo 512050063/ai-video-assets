@@ -560,12 +560,13 @@ body {
   color: var(--adm-text-primary);
 }
 
-/* 两行截断（标题类单元格） */
+/* 两行截断（标题类单元格）：需覆盖 .adm-cell-text 的 nowrap，否则超长文字不换行、省略号失效 */
 .adm-cell-text--clamp2 {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+  white-space: normal;
   word-break: break-word;
   line-height: 1.4;
 }

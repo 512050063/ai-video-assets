@@ -102,7 +102,6 @@
                 >
                   <template #error><img src="/placeholder.svg" class="char-avatar" alt="暂无资产" /></template>
                 </el-image>
-                <span class="char-names" :title="row.characters.map((c) => c.character_name).join('、')">{{ row.characters.map((c) => c.character_name).join('、') }}</span>
               </div>
               <div v-else class="char-cell">
                 <img src="/placeholder.svg" class="char-avatar is-empty" alt="未绑定人物模型" title="未绑定人物模型" />
@@ -143,12 +142,12 @@
                 <span class="prod-time-row is-start">
                   <el-icon :size="12"><VideoPlay /></el-icon>
                   <span>开始</span>
-                  <span class="adm-cell-time">{{ row.produced_at ? formatDateTime(row.produced_at) : '—' }}</span>
+                  <span class="adm-cell-time">{{ row.produced_at ? formatDate(row.produced_at) : '—' }}</span>
                 </span>
                 <span class="prod-time-row is-done">
                   <el-icon :size="12"><CircleCheckFilled /></el-icon>
                   <span>完成</span>
-                  <span class="adm-cell-time">{{ row.completed_at ? formatDateTime(row.completed_at) : '—' }}</span>
+                  <span class="adm-cell-time">{{ row.completed_at ? formatDate(row.completed_at) : '—' }}</span>
                 </span>
               </div>
             </template>
@@ -164,10 +163,7 @@
 
           <el-table-column label="提示词" min-width="92" align="left">
             <template #default="{ row }">
-              <span v-if="row.prompt && row.prompt.length" class="adm-cell-text adm-cell-text--clamp2"
-                :title="row.prompt.map((p) => `${p.seg}：${p.text || ''}`).join('；')">
-                {{ row.prompt.map((p) => p.seg).join(' / ') }}
-              </span>
+              <span v-if="promptToText(row.prompt)" class="prompt-cell">{{ promptToText(row.prompt) }}</span>
               <span v-else class="adm-cell-empty">—</span>
             </template>
           </el-table-column>
@@ -422,6 +418,38 @@
       @confirm="doChangeStatus"
     />
 
+    <!-- 制作中→确认完成：选择完成时间（默认今天，只选日期） -->
+    <el-dialog
+      v-model="completeDialog.visible"
+      title="确认完成制作"
+      width="420px"
+      :close-on-click-modal="false"
+      append-to-body
+      class="complete-dialog"
+    >
+      <div class="complete-body">
+        <div class="complete-hint">
+          <el-icon :size="16"><CircleCheckFilled /></el-icon>
+          <span>完成后状态将更新为「待发布」，并记录制作完成日期。</span>
+        </div>
+        <div class="complete-field">
+          <label>完成日期</label>
+          <el-date-picker
+            v-model="completeDialog.date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择完成日期"
+            style="width: 100%"
+          />
+        </div>
+        <p class="complete-tip">默认今天，可修改为实际完成日期；时间部分不计入统计。</p>
+      </div>
+      <template #footer>
+        <el-button @click="completeDialog.visible = false">取消</el-button>
+        <el-button type="primary" :loading="completeDialog.loading" @click="doCompleteProduction">确认完成</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 删除确认 -->
     <ConfirmDialog
       v-model="confirm.visible"
@@ -444,7 +472,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import DialogHeader from '../components/ui/DialogHeader.vue'
 import OptionBadge from '../components/ui/OptionBadge.vue'
 import StatCard from '../components/ui/StatCard.vue'
-import { api, formatDateTime, productionStatusLabel, productionStatusType } from '../api'
+import { api, formatDate, productionStatusLabel, productionStatusType } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { usePermissionStore } from '../stores/permission'
 import { useSettingsStore } from '../stores/settings'
@@ -468,6 +496,14 @@ const statusConfirm = reactive({
   visible: false, loading: false, row: null, target: '',
   title: '', message: '', confirmText: '', variant: 'success', icon: 'success'
 })
+// 制作中→待发布：选择完成日期（默认今天）
+const completeDialog = reactive({ visible: false, loading: false, row: null, date: '' })
+
+function todayString() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
 // 四项统计：内部「已完成」在展示层即为「已发布」
 const counts = computed(() => {
   const all = list.value
@@ -655,12 +691,11 @@ function openStatusConfirm(row) {
       ElMessage.warning(`请先补全制作信息：${missing.join('、')}，再确认完成`)
       return
     }
-    statusConfirm.target = '待发布'
-    statusConfirm.title = '确认完成制作'
-    statusConfirm.message = `确定「${row.title || '该视频'}」已完成制作吗？确认后状态更新为「待发布」。`
-    statusConfirm.confirmText = '确认完成'
-    statusConfirm.variant = 'success'
-    statusConfirm.icon = 'success'
+    // 制作中→待发布：弹窗选择完成日期（默认今天）
+    completeDialog.row = row
+    completeDialog.date = todayString()
+    completeDialog.visible = true
+    return
   } else if (row.status === '待发布') {
     statusConfirm.target = '制作中'
     statusConfirm.title = '还原为制作中'
@@ -690,6 +725,32 @@ async function doChangeStatus() {
     ElMessage.error(e.response?.data?.detail || '状态修改失败')
   } finally {
     statusConfirm.loading = false
+  }
+}
+
+// 制作中确认完成：把所选日期（当天 23:59:59）作为完成时间写入，状态改为待发布
+async function doCompleteProduction() {
+  const row = completeDialog.row
+  if (!row) return
+  if (!completeDialog.date) {
+    ElMessage.warning('请选择完成日期')
+    return
+  }
+  completeDialog.loading = true
+  try {
+    const completedAt = `${completeDialog.date}T23:59:59`
+    const { data } = await api.put(`/productions/${row.id}`, {
+      status: '待发布', completed_at: completedAt
+    })
+    row.status = data.status
+    row.produced_at = data.produced_at
+    row.completed_at = data.completed_at
+    ElMessage.success(`状态已改为「${data.status}」`)
+    completeDialog.visible = false
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '状态修改失败')
+  } finally {
+    completeDialog.loading = false
   }
 }
 
@@ -790,10 +851,9 @@ onMounted(async () => {
 }
 .prod-status-btn:disabled { cursor: default; }
 
-.char-cell { display: flex; align-items: center; gap: 5px; }
-.char-avatar { width: 26px; height: 26px; border-radius: 9px; border: 1px solid rgba(123, 163, 209, 0.2); display: block; flex-shrink: 0; background: var(--adm-panel-soft); }
+.char-cell { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.char-avatar { width: 48px; height: 48px; border-radius: 10px; border: 1px solid rgba(123, 163, 209, 0.2); display: block; flex-shrink: 0; background: var(--adm-panel-soft); }
 .char-avatar.is-empty { opacity: 0.55; }
-.char-names { font-size: 12.5px; color: var(--adm-text-secondary); overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; word-break: break-word; }
 
 /* 创作时间：开始 / 完成上下两行，图标区分 */
 .prod-time-cell { display: flex; flex-direction: column; gap: 3px; width: 100%; }
@@ -802,6 +862,43 @@ onMounted(async () => {
 .prod-time-row.is-done .el-icon { color: #3da377; }
 .prod-time-row > span:first-of-type { color: var(--adm-text-tertiary); }
 .prod-time-row .adm-cell-time { font-size: 11px; }
+
+/* 提示词列：最多两行，溢出省略，不做悬浮提示 */
+.prompt-cell {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  word-break: break-word;
+  line-height: 1.4;
+  font-size: 12.5px;
+  color: var(--adm-text-secondary);
+  white-space: pre-line;
+}
+
+/* 制作中确认完成弹窗：完成日期选择 */
+.complete-body { padding: 4px 0; }
+.complete-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: var(--adm-blue-bg, #eef4ff);
+  color: var(--adm-text-regular);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.complete-hint .el-icon { color: var(--el-color-success, #3da377); flex-shrink: 0; margin-top: 1px; }
+.complete-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--adm-text-regular);
+}
+.complete-tip { margin: 10px 0 0; font-size: 12px; color: var(--adm-text-placeholder); line-height: 1.5; }
 
 /* 视频名称第二行：作者 + 类别（复刻创意灵感） */
 .idea-author { color: var(--adm-text-secondary); margin-right: 6px; }
