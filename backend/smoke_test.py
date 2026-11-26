@@ -1363,7 +1363,7 @@ def run():
             def _fake_videos(query, limit, profile_key=None):
                 return {"videos": [{"video_id": vid, "title": PREFIX + "同步作品",
                                     "tags": [PREFIX + "同步标签"], "plays": 123, "likes": 45,
-                                    "comments": 6, "shares": 7, "cover": "",
+                                    "comments": 6, "collects": 8, "shares": 7, "cover": "",
                                     "duration": 63.5, "create_time": 1730000000}]}
 
             dc.fetch_account = _fake_acc
@@ -1388,6 +1388,10 @@ def run():
                (sm_row or {}).get("tags"))
             ok("发布数据摘要时长取抖音作品自身", sm_row is not None
                and sm_row.get("duration") == 63.5, (sm_row or {}).get("duration"))
+            ok("采集作品收藏数写入", synced_row is not None and synced_row.collects == 8,
+               getattr(synced_row, "collects", None))
+            ok("发布数据摘要收藏取抖音作品自身", sm_row is not None
+               and sm_row.get("collects") == 8, (sm_row or {}).get("collects"))
             ok("手动更新同时写账号快照", s.query(PublishAccountSnapshot).filter(
                 PublishAccountSnapshot.account_id == test_acc.id).count() == before_snap + 1)
             snap_latest = s.query(PublishAccountSnapshot).filter(

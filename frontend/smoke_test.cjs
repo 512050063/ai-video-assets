@@ -664,13 +664,14 @@ async function main() {
 
     const tableHeaders = await page.locator('.adm-card--table .el-table__header th .cell').allTextContents()
     const pubHeaders = tableHeaders.map((h) => h.trim())
-    ok('视频分类与状态合并为分类列', pubHeaders.includes('分类')
-       && !pubHeaders.includes('视频分类') && !pubHeaders.includes('状态'), pubHeaders.join('/'))
-    ok('分类列状态只显示圆点不显示文字',
-       await page.locator('.adm-card--table .cat-status-text').count() === 0)
-    const statusDots = page.locator('.adm-card--table .cat-status-dot')
-    if (await statusDots.count()) {
-      const dotColors = await statusDots.evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor))
+    ok('分类列已去掉、状态列改为发布状态', pubHeaders.includes('发布状态')
+       && !pubHeaders.includes('分类') && !pubHeaders.includes('创作发布'), pubHeaders.join('/'))
+    ok('发布数据表含视频数据列', pubHeaders.includes('视频数据'), pubHeaders.join('/'))
+    const statusTags = page.locator('.adm-card--table .pub-status-tag')
+    if (await statusTags.count()) {
+      const tagTexts = await statusTags.allInnerTexts()
+      ok('发布状态显示正常/隐藏文字', tagTexts.every((t) => ['正常', '隐藏'].includes(t.trim())), tagTexts.join(','))
+      const dotColors = await page.locator('.adm-card--table .pub-status-dot').evaluateAll((els) => els.map((e) => getComputedStyle(e).backgroundColor))
       ok('状态色点使用柔和绿/红', dotColors.every((c) => ['rgb(108, 196, 154)', 'rgb(226, 138, 138)'].includes(c)),
          dotColors.join(','))
     }

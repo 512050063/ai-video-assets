@@ -457,6 +457,7 @@ class PublishStat(Base):
     plays = Column(Integer, default=0)
     likes = Column(Integer, default=0)
     comments = Column(Integer, default=0)
+    collects = Column(Integer, default=0)  # 收藏数（抖音作品自身采集数据）
     shares = Column(Integer, default=0)
     account = Column(String(100), default="")  # 发布账号（配置中心维护，快照时记录名称）
     source = Column(String(20), default="manual")  # manual 手工录入 / auto 自动采集
@@ -480,6 +481,7 @@ class DouyinImport(Base):
     plays = Column(Integer, default=0)
     likes = Column(Integer, default=0)
     comments = Column(Integer, default=0)
+    collects = Column(Integer, default=0)  # 收藏数（抖音作品自身采集数据）
     shares = Column(Integer, default=0)
     create_time = Column(Integer, nullable=True)  # 作品发布时间（秒级时间戳）
     duration = Column(Float, nullable=True)  # 作品时长（秒，抖音视频自身数据）

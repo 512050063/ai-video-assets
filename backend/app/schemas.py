@@ -724,6 +724,7 @@ class PublishStatIn(BaseModel):
     plays: int = 0
     likes: int = 0
     comments: int = 0
+    collects: int = 0
     shares: int = 0
     account: str = ""
     source: str = "manual"
@@ -755,6 +756,7 @@ class DouyinImportVideoIn(BaseModel):
     plays: int = 0
     likes: int = 0
     comments: int = 0
+    collects: int = 0
     shares: int = 0
     create_time: Optional[int] = None   # 作品发布时间（秒级时间戳）
     duration: Optional[float] = None    # 作品时长（秒，抖音视频自身数据）
@@ -786,6 +788,7 @@ class DouyinImportItemOut(BaseModel):
     plays: int = 0
     likes: int = 0
     comments: int = 0
+    collects: int = 0
     shares: int = 0
     create_time: Optional[int] = None
     duration: Optional[float] = None
@@ -805,6 +808,7 @@ class DouyinImportUpdate(BaseModel):
     plays: int = 0
     likes: int = 0
     comments: int = 0
+    collects: int = 0
     shares: int = 0
     account_name: str = ""
 
@@ -820,6 +824,7 @@ class PublishStatUpdate(BaseModel):
     plays: int = 0
     likes: int = 0
     comments: int = 0
+    collects: int = 0
     shares: int = 0
     account: str = ""
     recorded_at: Optional[datetime] = None
@@ -833,6 +838,7 @@ class PublishStatOut(BaseModel):
     plays: int
     likes: int
     comments: int
+    collects: int = 0
     shares: int
     account: str = ""
     source: str = "manual"

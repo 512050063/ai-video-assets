@@ -92,7 +92,7 @@ def summary(
     matched_production_ids = {r.production_id for r in import_rows if r.production_id}
 
     rows = []
-    total = {"plays": 0, "likes": 0, "comments": 0, "shares": 0}
+    total = {"plays": 0, "likes": 0, "comments": 0, "collects": 0, "shares": 0}
     normal_count = 0  # 正常记录数：统计口径只认正常，隐藏仅用于展示
     accounts = {}
     # 去掉「删除」状态：只统计正常/隐藏，计数不受当前 data_status 筛选影响
@@ -115,6 +115,7 @@ def summary(
                 "plays": 0,
                 "likes": 0,
                 "comments": 0,
+                "collects": 0,
                 "shares": 0,
                 "followers": 0,
                 "avatar": "",
@@ -125,6 +126,7 @@ def summary(
             "plays": latest.plays if latest else 0,
             "likes": latest.likes if latest else 0,
             "comments": latest.comments if latest else 0,
+            "collects": latest.collects if latest else 0,
             "shares": latest.shares if latest else 0,
         }
         # 账号分组指标同样只统计正常记录
@@ -168,6 +170,7 @@ def summary(
             "plays": latest.plays if latest else 0,
             "likes": latest.likes if latest else 0,
             "comments": latest.comments if latest else 0,
+            "collects": latest.collects if latest else 0,
             "shares": latest.shares if latest else 0,
             "account": (latest.account if latest else "") or "",
             "source": (latest.source if latest else "manual") or "manual",
@@ -215,6 +218,7 @@ def summary(
                 "plays": 0,
                 "likes": 0,
                 "comments": 0,
+                "collects": 0,
                 "shares": 0,
                 "followers": 0,
                 "avatar": (acc.avatar if acc else "") or "",
@@ -225,6 +229,7 @@ def summary(
             "plays": stat.plays if stat else r.plays,
             "likes": stat.likes if stat else r.likes,
             "comments": stat.comments if stat else r.comments,
+            "collects": stat.collects if stat else r.collects,
             "shares": stat.shares if stat else r.shares,
         }
         # 账号分组指标同样只统计正常记录
@@ -301,6 +306,7 @@ def summary(
                 "plays": 0,
                 "likes": 0,
                 "comments": 0,
+                "collects": 0,
                 "shares": 0,
                 "followers": 0,
                 "avatar": a.avatar or "",
@@ -398,6 +404,7 @@ def _apply_stat_values(stat: PublishStat, data: PublishStatIn) -> None:
     stat.plays = max(0, data.plays)
     stat.likes = max(0, data.likes)
     stat.comments = max(0, data.comments)
+    stat.collects = max(0, data.collects)
     stat.shares = max(0, data.shares)
     stat.account = (data.account or "").strip()
     stat.source = data.source or "manual"
@@ -424,6 +431,7 @@ def _upsert_stat(db: Session, production: Production, data: PublishStatIn) -> tu
         plays=max(0, data.plays),
         likes=max(0, data.likes),
         comments=max(0, data.comments),
+        collects=max(0, data.collects),
         shares=max(0, data.shares),
         account=(data.account or "").strip(),
         source=(data.source or "manual"),
@@ -542,6 +550,7 @@ def import_douyin_videos(
             row.plays = max(0, v.plays)
             row.likes = max(0, v.likes)
             row.comments = max(0, v.comments)
+            row.collects = max(0, v.collects)
             row.shares = max(0, v.shares)
             row.create_time = v.create_time
             row.duration = v.duration
@@ -561,6 +570,7 @@ def import_douyin_videos(
                 plays=max(0, v.plays),
                 likes=max(0, v.likes),
                 comments=max(0, v.comments),
+                collects=max(0, v.collects),
                 shares=max(0, v.shares),
                 create_time=v.create_time,
                 duration=v.duration,
@@ -622,6 +632,7 @@ def update_import(
     row.plays = max(0, data.plays)
     row.likes = max(0, data.likes)
     row.comments = max(0, data.comments)
+    row.collects = max(0, data.collects)
     row.shares = max(0, data.shares)
     row.account_name = (data.account_name or "").strip()
     # 已关联创作记录时，同一行的数据快照同步更新，避免表格显示旧值
@@ -630,6 +641,7 @@ def update_import(
         stat.plays = row.plays
         stat.likes = row.likes
         stat.comments = row.comments
+        stat.collects = row.collects
         stat.shares = row.shares
         stat.account = row.account_name
     db.commit()
@@ -725,6 +737,7 @@ def match_import(
         plays=row.plays,
         likes=row.likes,
         comments=row.comments,
+        collects=row.collects,
         shares=row.shares,
         account=row.account_name or "",
         source="auto",
@@ -778,6 +791,8 @@ def update_stat(
         stat.likes = max(0, data.likes)
     if "comments" in data.model_fields_set:
         stat.comments = max(0, data.comments)
+    if "collects" in data.model_fields_set:
+        stat.collects = max(0, data.collects)
     if "shares" in data.model_fields_set:
         stat.shares = max(0, data.shares)
     if "account" in data.model_fields_set:
@@ -792,6 +807,7 @@ def update_stat(
             imp.plays = stat.plays
             imp.likes = stat.likes
             imp.comments = stat.comments
+            imp.collects = stat.collects
             imp.shares = stat.shares
             if stat.account:
                 imp.account_name = stat.account

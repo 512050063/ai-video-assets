@@ -89,6 +89,7 @@
                   <span v-else class="adm-cell-text adm-cell-text--clamp2" :title="row.title || '未命名'">
                     {{ row.title || '未命名' }}
                   </span>
+                  <!-- 第二行：绑定的创意灵感视频名称；未绑定显示「未配置」，点击可匹配 -->
                   <span
                     v-if="row.import_id"
                     class="pub-ref-name"
@@ -96,8 +97,14 @@
                     :title="row.reference_title ? `创意视频名称：${row.reference_title} · 点击重新匹配` : '点击匹配视频创作中待发布的记录'"
                     @click="openMatchDialog(row)"
                   >{{ row.reference_title || '未配置' }}</span>
-                  <div v-else class="adm-cell-sub" :title="row.published_url || ''">
-                    {{ row.published_url ? '已发布' : '未回链' }}
+                  <span v-else class="pub-ref-name is-unset-static">{{ row.reference_title || '未配置' }}</span>
+                  <!-- 第三行：@创作者 + 分类；未绑定显示「未配置」 -->
+                  <div class="pub-ref-meta">
+                    <template v-if="row.reference_title">
+                      <span class="pub-ref-author" :title="row.owner_name || '未配置'">@{{ row.owner_name || '未配置' }}</span>
+                      <span v-if="row.category_name" class="pub-ref-cat" :title="row.category_name">{{ row.category_name }}</span>
+                    </template>
+                    <span v-else class="pub-ref-meta-unset">未配置</span>
                   </div>
                 </div>
               </div>
@@ -130,6 +137,10 @@
                   <span class="video-stat-ico"><SocialIcon name="comment" :size="11" /></span>
                   <span class="video-stat-num">{{ formatCount(row.comments) }}</span>
                 </span>
+                <span class="video-stat-item is-collect" title="收藏量">
+                  <span class="video-stat-ico"><SocialIcon name="star" :size="11" /></span>
+                  <span class="video-stat-num">{{ formatCount(row.collects) }}</span>
+                </span>
                 <span class="video-stat-item is-share" title="转发量">
                   <span class="video-stat-ico"><SocialIcon name="share" :size="11" /></span>
                   <span class="video-stat-num">{{ formatCount(row.shares) }}</span>
@@ -138,30 +149,13 @@
             </template>
           </el-table-column>
 
-          <!-- 分类：状态色点 + 分类名合并成一列，未绑定分类显示「暂无」 -->
-          <el-table-column label="分类" min-width="120" align="center">
-            <template #default="{ row }">
-              <div class="cat-status-cell">
-                <span class="cat-status" :class="row.data_status === '隐藏' ? 'is-hidden' : 'is-normal'">
-                  <i class="cat-status-dot" />
-                </span>
-                <OptionBadge
-                  v-if="row.category_name"
-                  :name="row.category_name"
-                  :color="settings.option('category', row.category_name).color"
-                  :image="settings.option('category', row.category_name).image"
-                  :display="settings.option('category', row.category_name).display"
-                />
-                <span v-else class="cat-status-none">暂无</span>
-              </div>
-            </template>
-          </el-table-column>
-
-          <!-- 创作发布：上创作人标签、下发布时间（同宽、小字） -->
-          <el-table-column label="创作发布" min-width="136" align="center">
+          <!-- 发布状态：第一行状态标签（绿点正常/红点隐藏），第二行发布时间；两行同宽 -->
+          <el-table-column label="发布状态" min-width="136" align="center">
             <template #default="{ row }">
               <div class="pub-owner-cell">
-                <span class="pub-owner-tag" :title="row.owner_name || '未配置'">{{ row.owner_name || '未配置' }}</span>
+                <span class="pub-status-tag" :class="row.data_status === '隐藏' ? 'is-hidden' : 'is-normal'">
+                  <i class="pub-status-dot" />{{ row.data_status === '隐藏' ? '隐藏' : '正常' }}
+                </span>
                 <span class="pub-owner-date adm-cell-time" :title="formatDateTime(row.published_at)">{{ formatDateTime(row.published_at) }}</span>
               </div>
             </template>
@@ -217,6 +211,7 @@
               <label>播放<el-input-number v-model="manual.form.plays" :min="0" :controls="false" /></label>
               <label>点赞<el-input-number v-model="manual.form.likes" :min="0" :controls="false" /></label>
               <label>评论<el-input-number v-model="manual.form.comments" :min="0" :controls="false" /></label>
+              <label>收藏<el-input-number v-model="manual.form.collects" :min="0" :controls="false" /></label>
               <label>转发<el-input-number v-model="manual.form.shares" :min="0" :controls="false" /></label>
             </div>
           </el-form-item>
@@ -266,6 +261,9 @@
         </el-form-item>
         <el-form-item label="评论量">
           <el-input-number v-model="record.form.comments" :min="0" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="收藏量">
+          <el-input-number v-model="record.form.collects" :min="0" style="width: 100%" />
         </el-form-item>
         <el-form-item label="转发量">
           <el-input-number v-model="record.form.shares" :min="0" style="width: 100%" />
@@ -424,7 +422,7 @@
               <span v-if="v.account_name" class="auto-video-account">{{ v.account_name }}</span>
             </div>
             <div class="auto-nums">
-              播放 {{ formatCount(v.plays) }} · 点赞 {{ formatCount(v.likes) }} · 评论 {{ formatCount(v.comments) }} · 转发 {{ formatCount(v.shares) }}
+              播放 {{ formatCount(v.plays) }} · 点赞 {{ formatCount(v.likes) }} · 评论 {{ formatCount(v.comments) }} · 收藏 {{ formatCount(v.collects) }} · 转发 {{ formatCount(v.shares) }}
               <span v-if="v.duration"> · 时长 {{ Number(v.duration).toFixed(1) }}S</span>
               <span v-if="v.create_time"> · {{ formatDateTime(v.create_time * 1000) }}</span>
             </div>
@@ -573,7 +571,7 @@ const record = reactive({
   visible: false,
   saving: false,
   row: null,
-  form: { plays: 0, likes: 0, comments: 0, shares: 0, account: '', video_id: '', recorded_at: null, data_status: '正常' }
+  form: { plays: 0, likes: 0, comments: 0, collects: 0, shares: 0, account: '', video_id: '', recorded_at: null, data_status: '正常' }
 })
 
 const confirm = reactive({ visible: false, loading: false, title: '', message: '', id: null, importId: null })
@@ -607,7 +605,7 @@ const manual = reactive({
   saving: false,
   tagsText: '',
   publishDate: null,
-  form: { title: '', cover: '', tags: [], plays: 0, likes: 0, comments: 0, shares: 0, data_status: '正常' }
+  form: { title: '', cover: '', tags: [], plays: 0, likes: 0, comments: 0, collects: 0, shares: 0, data_status: '正常' }
 })
 
 // 已勾选的采集作品
@@ -711,6 +709,7 @@ function openRecord(row) {
     plays: row.plays || 0,
     likes: row.likes || 0,
     comments: row.comments || 0,
+    collects: row.collects || 0,
     shares: row.shares || 0,
     account: row.account || '',
     video_id: row.video_id || '',
@@ -734,6 +733,7 @@ async function saveRecord() {
         plays: statFields.plays,
         likes: statFields.likes,
         comments: statFields.comments,
+        collects: statFields.collects,
         shares: statFields.shares,
         account_name: statFields.account || ''
       })
@@ -842,7 +842,7 @@ function syncAutoAccountLabel() {
 function openManualImport() {
   manual.form = {
     title: '', cover: '', tags: [],
-    plays: 0, likes: 0, comments: 0, shares: 0, data_status: '正常'
+    plays: 0, likes: 0, comments: 0, collects: 0, shares: 0, data_status: '正常'
   }
   manual.tagsText = ''
   manual.publishDate = Date.now()
@@ -870,6 +870,7 @@ async function saveManualImport() {
         plays: manual.form.plays,
         likes: manual.form.likes,
         comments: manual.form.comments,
+        collects: manual.form.collects,
         shares: manual.form.shares,
         create_time: manual.publishDate ? Math.floor(ts / 1000) : null,
         account_id: account?.id || null,
@@ -972,6 +973,7 @@ function videoToImport(v) {
     plays: v.plays || 0,
     likes: v.likes || 0,
     comments: v.comments || 0,
+    collects: v.collects || 0,
     shares: v.shares || 0,
     create_time: v.create_time || null,
     duration: v.duration || null,
@@ -1169,7 +1171,7 @@ onMounted(async () => {
 
 /* 视频名称：封面 + 名称合并列 */
 .pub-name-cell { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
-.pub-cover { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--adm-border); }
+.pub-cover { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex-shrink: 0; border: 1px solid var(--adm-border); }
 .pub-cover.is-empty { display: grid; place-items: center; font-size: 10px; color: var(--adm-text-placeholder); background: var(--adm-panel-soft); }
 .pub-name-main { flex: 1; min-width: 0; }
 .pub-ref-name {
@@ -1191,40 +1193,39 @@ onMounted(async () => {
 .pub-ref-name.is-clickable { cursor: pointer; }
 .pub-ref-name.is-clickable:hover { color: var(--el-color-primary); }
 .pub-ref-name.is-unset:hover { opacity: 0.78; }
+.pub-ref-name.is-unset-static { color: var(--adm-text-placeholder); }
+/* 视频名称第三行：@创作者 + 分类（未绑定显示「未配置」） */
+.pub-ref-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--adm-text-placeholder, #a8abb2);
+  line-height: 1.4;
+}
+.pub-ref-author {
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--adm-text-secondary);
+}
+.pub-ref-cat {
+  max-width: 72px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--adm-panel-soft, #f5f7fa);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pub-ref-meta-unset { color: var(--adm-text-placeholder); }
 .pub-title-link { color: inherit; text-decoration: none; }
 .pub-title-link:hover { color: var(--el-color-primary); text-decoration: underline; }
 
-/* 分类列：状态圆点（柔和绿 / 柔和红）+ 分类名，单行左右排列；状态不用文字 */
-.cat-status-cell {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  min-width: 0;
-}
-.cat-status {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.cat-status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.cat-status.is-normal .cat-status-dot { background: #6cc49a; box-shadow: 0 0 0 2px rgba(108, 196, 154, 0.16); }
-.cat-status.is-hidden .cat-status-dot { background: #e28a8a; box-shadow: 0 0 0 2px rgba(226, 138, 138, 0.16); }
-.cat-status-none {
-  font-size: 12px;
-  color: var(--adm-text-placeholder);
-  line-height: 16px;
-}
-
-/* 创作发布：上创作人标签、下发布时间（同宽、小字） */
+/* 发布状态：上状态标签、下发布时间（同宽、小字） */
 .pub-owner-cell {
   display: flex;
   flex-direction: column;
@@ -1232,24 +1233,37 @@ onMounted(async () => {
   gap: 4px;
   width: 100%;
 }
-.pub-owner-tag {
+.pub-status-tag {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 5px;
   box-sizing: border-box;
   width: 106px;
   height: 22px;
   padding: 0 6px;
   border-radius: 6px;
-  background: var(--adm-blue-bg, #eef4ff);
-  color: var(--el-color-primary, #4a7cc4);
   font-size: 12px;
   font-weight: 600;
   line-height: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pub-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.pub-status-tag.is-normal {
+  background: rgba(108, 196, 154, 0.12);
+  color: #4f9e78;
+}
+.pub-status-tag.is-normal .pub-status-dot { background: #6cc49a; box-shadow: 0 0 0 2px rgba(108, 196, 154, 0.16); }
+.pub-status-tag.is-hidden {
+  background: rgba(226, 138, 138, 0.12);
+  color: #c26a6a;
+}
+.pub-status-tag.is-hidden .pub-status-dot { background: #e28a8a; box-shadow: 0 0 0 2px rgba(226, 138, 138, 0.16); }
 .pub-owner-date {
   display: block;
   box-sizing: border-box;
@@ -1262,10 +1276,10 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-/* 视频数据：时长 / 播放 / 点赞 / 评论 / 转发（两列，与创意灵感同规则） */
+/* 视频数据：时长 / 播放 / 点赞 / 评论 / 收藏 / 转发（两行三列） */
 .video-stat {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
   justify-items: center;
   gap: 5px 8px;
@@ -1285,6 +1299,7 @@ onMounted(async () => {
 .video-stat-item.is-play .video-stat-ico { color: #4a7cc4; }
 .video-stat-item.is-like .video-stat-ico { color: #e8474f; }
 .video-stat-item.is-comment .video-stat-ico { color: #7b62c9; }
+.video-stat-item.is-collect .video-stat-ico { color: #e6932c; }
 .video-stat-item.is-share .video-stat-ico { color: #3da377; }
 
 .metric-plays {

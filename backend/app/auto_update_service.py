@@ -183,6 +183,7 @@ def _sync_publish_videos(
             "plays": _int(raw.get("plays")),
             "likes": _int(raw.get("likes")),
             "comments": _int(raw.get("comments")),
+            "collects": _int(raw.get("collects")),
             "shares": _int(raw.get("shares")),
             "create_time": raw.get("create_time"),
             "duration": _float(raw.get("duration")),
@@ -215,6 +216,7 @@ def _sync_publish_videos(
             row.plays = item["plays"]
             row.likes = item["likes"]
             row.comments = item["comments"]
+            row.collects = item["collects"]
             row.shares = item["shares"]
             row.duration = item["duration"]
             if item["create_time"] is not None:
@@ -240,6 +242,7 @@ def _sync_publish_videos(
                 plays=item["plays"],
                 likes=item["likes"],
                 comments=item["comments"],
+                collects=item["collects"],
                 shares=item["shares"],
                 create_time=create_time,
                 duration=item["duration"],
@@ -258,6 +261,7 @@ def _sync_publish_videos(
             stat.plays = item["plays"]
             stat.likes = item["likes"]
             stat.comments = item["comments"]
+            stat.collects = item["collects"]
             stat.shares = item["shares"]
             stat.account = account.name
             stat.recorded_at = datetime.now()

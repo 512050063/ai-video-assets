@@ -293,6 +293,9 @@ def run_migrations():
         _add_column(conn, "douyin_imports", "tags", "JSON DEFAULT '[]'")
         # 抖音视频自身时长（秒），采集自作品详情，不取关联创作记录
         _add_column(conn, "douyin_imports", "duration", "FLOAT")
+        # 收藏数：发布数据快照与抖音采集作品均保存作品自身收藏数据
+        _add_column(conn, "publish_stats", "collects", "INTEGER DEFAULT 0")
+        _add_column(conn, "douyin_imports", "collects", "INTEGER DEFAULT 0")
 
         # 抖音作品待匹配池：按作品 ID 去重索引（表由 create_all 建立）
         if _table_exists(conn, "douyin_imports"):
