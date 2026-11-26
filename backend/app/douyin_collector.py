@@ -380,6 +380,8 @@ def _run_browser_collector(
                 input=json.dumps(payload, ensure_ascii=False),
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout,
                 env=env,
                 cwd=cwd,
@@ -399,6 +401,8 @@ def _run_browser_collector(
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 env=env,
                 cwd=cwd,
             )

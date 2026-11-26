@@ -726,6 +726,10 @@ def _login_worker(
 
     def on_qr(event: dict):
         image = (event.get("data") or "").strip()
+        # Node 端优先返回 img.src 原始 data URL；兼容旧的纯 base64 输出。
+        # 注意不要重复套前缀，否则前端拿到双重前缀会显示不出来。
+        qr = image if image.startswith("data:") else (
+            f"data:image/png;base64,{image}" if image else "")
         with _LOGIN_LOCK:
             session = _LOGIN_SESSIONS.get(session_id)
             if not session or session.get("status") == "cancelled":
@@ -733,7 +737,7 @@ def _login_worker(
             session["qr_seq"] = int(session.get("qr_seq") or 0) + 1
             session.update(
                 status="waiting_scan",
-                qr=f"data:image/png;base64,{image}" if image else "",
+                qr=qr,
                 qr_seq=session["qr_seq"],
                 kind=event.get("kind") or "qr",
                 message="请用手机抖音扫描页面上的二维码",

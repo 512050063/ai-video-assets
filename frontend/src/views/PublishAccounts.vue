@@ -372,14 +372,27 @@
     >
       <div class="remote-qr-body">
         <div v-if="qrImage" class="remote-qr-image-wrap">
-          <img :src="qrImage" class="remote-qr-image" alt="抖音登录二维码" />
+          <el-image
+            v-if="qrKind === 'page'"
+            :src="qrImage"
+            :preview-src-list="[qrImage]"
+            preview-teleported
+            fit="contain"
+            class="remote-qr-image is-page"
+            alt="抖音登录弹窗截图（点击可放大）"
+          />
+          <img v-else :src="qrImage" class="remote-qr-image" alt="抖音登录二维码" />
           <div v-if="qrKind === 'page'" class="remote-qr-warning">
-            未能自动定位二维码元素，当前显示登录页截图；请按页面提示操作，或改用手动添加
+            未能直接提取二维码，当前显示登录弹窗截图。请点击图片放大后按页面提示扫码，或改用手动添加。
+          </div>
+          <div v-else class="remote-qr-ready">
+            高清二维码已就绪<span v-if="qrSeq > 1"> · 已自动刷新 {{ qrSeq - 1 }} 次</span>
           </div>
         </div>
         <div v-else class="remote-qr-loading">
           <el-icon class="is-loading"><Connection /></el-icon>
           <span>{{ qrMessage || '正在打开抖音登录页…' }}</span>
+          <span class="remote-qr-loading-sub">已等待 {{ qrElapsed }} 秒，二维码生成后会自动显示</span>
         </div>
         <div class="remote-qr-status">{{ qrMessage }}</div>
         <div class="remote-qr-hint">
@@ -439,6 +452,8 @@ const qrSeq = ref(0)
 const qrKind = ref('qr')
 const qrMessage = ref('')
 const qrTimer = ref(null)
+const qrElapsed = ref(0)
+let qrElapsedTimer = null
 const updatingId = ref(null)      // 行内更新中
 const snapshotVisible = ref(false)
 const snapshotLoading = ref(false)
@@ -689,6 +704,10 @@ function clearQrTimer() {
     clearInterval(qrTimer.value)
     qrTimer.value = null
   }
+  if (qrElapsedTimer) {
+    clearInterval(qrElapsedTimer)
+    qrElapsedTimer = null
+  }
 }
 
 async function cancelQrLogin() {
@@ -706,8 +725,11 @@ async function startRemoteLogin(accountId) {
   qrImage.value = ''
   qrSeq.value = 0
   qrKind.value = 'qr'
-  qrMessage.value = '正在打开抖音登录页（首次加载约需半分钟），请稍候…'
+  qrMessage.value = '正在连接抖音登录页（首次约需 10~20 秒），请稍候…'
+  qrElapsed.value = 0
   qrVisible.value = true
+  if (qrElapsedTimer) clearInterval(qrElapsedTimer)
+  qrElapsedTimer = setInterval(() => { qrElapsed.value += 1 }, 1000)
   try {
     const { data } = await api.post('/douyin/login/start', accountId ? { account_id: accountId } : {})
     if (!data.ok) throw new Error(data.message || '启动扫码失败')
@@ -717,7 +739,7 @@ async function startRemoteLogin(accountId) {
     ElMessage.error(e.response?.data?.detail || e.message || '启动扫码失败')
     return
   }
-  qrTimer.value = setInterval(pollRemoteLogin, 1200)
+  qrTimer.value = setInterval(pollRemoteLogin, 800)
   pollRemoteLogin()
 }
 
@@ -732,6 +754,7 @@ async function pollRemoteLogin() {
     if (data.qr) {
       qrImage.value = data.qr
       qrSeq.value = Number(data.qr_seq || 0)
+      if (qrElapsedTimer) { clearInterval(qrElapsedTimer); qrElapsedTimer = null }
     }
     qrKind.value = data.kind || 'qr'
     qrMessage.value = data.message || ''
@@ -1026,12 +1049,27 @@ onUnmounted(() => {
   gap: 8px;
 }
 .remote-qr-image {
-  width: 240px;
-  height: 240px;
+  width: 260px;
+  height: 260px;
   object-fit: contain;
+  padding: 6px;
   border: 1px solid var(--el-border-color-lighter);
   border-radius: 8px;
   background: #fff;
+}
+.remote-qr-image.is-page {
+  width: 100%;
+  height: 210px;
+  cursor: zoom-in;
+}
+.remote-qr-ready {
+  font-size: 12px;
+  color: var(--el-color-success);
+  text-align: center;
+}
+.remote-qr-loading-sub {
+  font-size: 12px;
+  color: var(--adm-text-secondary, #94a3b8);
 }
 .remote-qr-warning {
   max-width: 320px;
