@@ -1202,6 +1202,15 @@ html.dark .el-checkbox__inner {
   background: transparent;
 }
 
+/* ---------------- 资产库网格（人物资产 / 素材共享）----------------
+   大屏保持原尺寸；小屏收窄列宽与封面，避免固定 230px 卡片把图片撑得过大。
+   两页共用同一组变量，保证缩放节奏一致。 */
+:root {
+  --asset-grid-min: 230px;
+  --asset-grid-gap: 18px;
+  --asset-cover-h: 200px;
+}
+
 /* ---------------- 低分辨率屏幕适配 ----------------
    1366×768 等常见笔记本：压缩页面间距、卡片内边距与表格行高，
    保证核心按钮和表格字段在首屏可见，不出现无谓的横向溢出。 */
@@ -1210,6 +1219,9 @@ html.dark .el-checkbox__inner {
     --adm-sidebar-width: 208px;
     --adm-header-height: 56px;
     --adm-radius-md: 16px;
+    --asset-grid-min: 168px;
+    --asset-grid-gap: 12px;
+    --asset-cover-h: 152px;
   }
   .stack { gap: 12px; }
   .stat-row {
@@ -1251,6 +1263,9 @@ html.dark .el-checkbox__inner {
 @media (max-width: 1100px) {
   :root {
     --adm-sidebar-width: 196px;
+    --asset-grid-min: 150px;
+    --asset-grid-gap: 10px;
+    --asset-cover-h: 132px;
   }
   .el-table { font-size: 13px; }
   .adm-page-desc { font-size: 12px; }

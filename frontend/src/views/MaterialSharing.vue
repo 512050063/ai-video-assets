@@ -822,8 +822,8 @@ onUnmounted(() => {
 
 .mat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(var(--asset-grid-min, 230px), 1fr));
+  gap: var(--asset-grid-gap, 18px);
 }
 .asset-card-move,
 .asset-card-enter-active,
@@ -851,7 +851,7 @@ onUnmounted(() => {
 }
 .upload-card.is-dragover { border-color: var(--el-color-primary); animation: upload-card-pulse 1s ease-in-out infinite; }
 .upload-cover {
-  height: 200px;
+  height: var(--asset-cover-h, 200px);
   position: relative;
   display: flex;
   flex-direction: column;
@@ -920,7 +920,7 @@ onUnmounted(() => {
   to { opacity: 0; }
 }
 .mat-cover { position: relative; background: var(--adm-panel-soft); }
-.mat-cover-img { width: 100%; height: 200px; display: block; object-fit: cover; }
+.mat-cover-img { width: 100%; height: var(--asset-cover-h, 200px); display: block; object-fit: cover; }
 .mat-badges {
   position: absolute;
   left: 0;
@@ -1009,7 +1009,7 @@ onUnmounted(() => {
 .move-lib:disabled { cursor: default; opacity: 0.7; }
 .move-current { margin-left: auto; font-size: 11px; color: var(--adm-text-placeholder); }
 .mat-cover-empty {
-  height: 200px;
+  height: var(--asset-cover-h, 200px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1094,4 +1094,14 @@ onUnmounted(() => {
 .drop-fade-enter-active, .drop-fade-leave-active { transition: opacity 0.16s ease; }
 .drop-fade-enter-from, .drop-fade-leave-to { opacity: 0; }
 .hidden-file { display: none; }
+
+/* 小屏封面收窄后，上传卡图标与文案同比收缩，避免图标挤占封面 */
+@media (max-width: 1366px) {
+  .upload-orbit { width: 54px; height: 54px; }
+  .upload-cover-title { margin-top: 8px; font-size: 14px; }
+  .upload-cover-sub { font-size: 11px; }
+  .mat-body { padding: 11px; }
+  .upload-card-body { height: 80px; padding: 11px; }
+  .is-uploading .mat-body { height: 80px; }
+}
 </style>

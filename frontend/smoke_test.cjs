@@ -954,6 +954,53 @@ async function main() {
       await page.waitForTimeout(300)
     }
 
+    /* ---------- 7b. 资产库网格：大屏 / 小屏响应式 ---------- */
+    section('7b. 资产库网格响应式（人物资产 / 素材共享）')
+    for (const route of ['/characters', '/materials']) {
+      const gridSel = route === '/characters' ? '.char-grid' : '.mat-grid'
+      const coverSel = route === '/characters' ? '.upload-cover' : '.upload-cover'
+      const label = route === '/characters' ? '人物资产' : '素材共享'
+      // 大屏：保持原尺寸
+      await page.setViewportSize({ width: 1600, height: 950 })
+      await page.goto(BASE + route, { waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(500)
+      const big = await page.evaluate(({ g, c }) => {
+        const grid = document.querySelector(g)
+        const cover = document.querySelector(c)
+        const cs = grid ? getComputedStyle(grid) : null
+        return {
+          min: cs ? parseFloat(cs.gridTemplateColumns.split(' ')[0]) : 0,
+          cols: cs ? cs.gridTemplateColumns.split(' ').length : 0,
+          coverH: cover ? Math.round(cover.getBoundingClientRect().height) : 0,
+          scrollW: document.documentElement.scrollWidth,
+          clientW: document.documentElement.clientWidth
+        }
+      }, { g: gridSel, c: coverSel })
+      ok(label + '大屏封面保持 200px', big.coverH === 200, 'coverH=' + big.coverH)
+      ok(label + '大屏无横向溢出', big.scrollW <= big.clientW + 1, `${big.scrollW}/${big.clientW}`)
+
+      // 小屏：列宽下限与封面高度同步收窄
+      await page.setViewportSize({ width: 1280, height: 720 })
+      await page.waitForTimeout(400)
+      const small = await page.evaluate(({ g, c }) => {
+        const grid = document.querySelector(g)
+        const cover = document.querySelector(c)
+        const cs = grid ? getComputedStyle(grid) : null
+        return {
+          min: cs ? parseFloat(cs.gridTemplateColumns.split(' ')[0]) : 0,
+          cols: cs ? cs.gridTemplateColumns.split(' ').length : 0,
+          coverH: cover ? Math.round(cover.getBoundingClientRect().height) : 0,
+          scrollW: document.documentElement.scrollWidth,
+          clientW: document.documentElement.clientWidth
+        }
+      }, { g: gridSel, c: coverSel })
+      ok(label + '小屏封面收窄至 152px', small.coverH === 152, 'coverH=' + small.coverH)
+      ok(label + '小屏列宽小于大屏', small.min < big.min, `big=${big.min} small=${small.min}`)
+      ok(label + '小屏列数不少于大屏', small.cols >= big.cols, `big=${big.cols} small=${small.cols}`)
+      ok(label + '小屏无横向溢出', small.scrollW <= small.clientW + 1, `${small.scrollW}/${small.clientW}`)
+    }
+    await page.setViewportSize({ width: 1600, height: 950 })
+
     /* ---------- 8. 清理测试数据 ---------- */
     if (testIdeaId) {
       await page.evaluate(async ({ t, id }) => {
