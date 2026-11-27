@@ -210,7 +210,7 @@ def run():
     ok("带连字符短链完整保留", code == 200 and parsed_h.get("url") == "https://v.douyin.com/edWBkm-meAI/",
        "url=%s" % parsed_h.get("url"))
 
-    code, parsed2 = req("POST", "/ideas/parse", {"text": "https://www.douyin.com/video/7123456789012345678"})
+    code, parsed2 = req("POST", "/ideas/parse", {"text": "https://www.douyin.com/video/7123456789012345678", "auto_fetch": False})
     ok("纯链接降级占位标题", code == 200 and bool(parsed2.get("title")) and not parsed2.get("title_from_text"),
        "title=%s msg=%s" % (parsed2.get("title"), parsed2.get("message")))
 

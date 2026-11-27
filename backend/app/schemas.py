@@ -873,6 +873,8 @@ class ShareTextIn(BaseModel):
     text: str = ""
     # 是否在解析链接后自动抓取作者/封面/视频数据（可关闭以加快纯文案解析）
     auto_fetch: bool = True
+    # 是否展开短链取 video id 用于判重（关闭时保留原始短链，不访问外网）
+    expand: bool = True
     # 编辑创意时重新解析原链接，排除自身避免误判为重复
     exclude_id: Optional[int] = None
 

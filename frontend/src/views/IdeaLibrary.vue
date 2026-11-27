@@ -136,7 +136,7 @@
                 @click="toggleBackup(row)"
               >
                 <el-icon v-if="row.is_backup" :size="13" class="status-star-on"><Star /></el-icon>
-                <el-tag :type="ideaStatusType(row.status)" size="small" effect="light">{{ row.status }}</el-tag>
+                <el-tag :type="ideaStatusType(row.status)" size="small" effect="light">{{ ideaStatusLabel(row.status) }}</el-tag>
               </button>
             </template>
           </el-table-column>
@@ -521,6 +521,7 @@ import {
   formatDate,
   formatDateTime,
   ideaStatusType,
+  ideaStatusLabel,
   planPriorityLabel
 } from '../api'
 import { useAuthStore } from '../stores/auth'

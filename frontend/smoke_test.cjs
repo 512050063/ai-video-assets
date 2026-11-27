@@ -104,6 +104,8 @@ async function main() {
        && ['创意总量', '已使用', '未使用', '今日新增'].every((s) => ideaStatLabels.includes(s)),
        ideaStatLabels.join('|'))
     ok('备选库不是状态列标签', await page.locator('.el-table__body td .el-tag').filter({ hasText: '备选库' }).count() === 0)
+    // 最终态展示统一：内部「已完成」在状态列显示为「已发布」，页面不出现「已完成」文案
+    ok('创意状态列不出现「已完成」文案', await page.locator('.el-table__body td .el-tag').filter({ hasText: '已完成' }).count() === 0)
     ok('页头状态下拉框已删除', await page.locator('.el-select__placeholder').filter({ hasText: '状态' }).count() === 0)
     const usageSelect = page.locator('.el-select').filter({ hasText: '全部' }).first()
     if (await usageSelect.count()) {

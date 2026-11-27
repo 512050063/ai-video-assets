@@ -29,7 +29,7 @@ export const IDEA_STATUS_OPTIONS = [
   { value: '已排期', type: 'warning', label: '已排期' },
   { value: '制作中', type: 'primary', label: '制作中' },
   { value: '待发布', type: 'warning', label: '待发布' },
-  { value: '已完成', type: 'success', label: '已完成' }
+  { value: '已完成', type: 'success', label: '已发布' }
 ]
 // 创意灵感页状态标签可直接切换的两态
 export const IDEA_STATUS_DIRECT = ['未使用', '已排期']
@@ -37,6 +37,12 @@ export const IDEA_STATUS_DIRECT = ['未使用', '已排期']
 export function ideaStatusType(status) {
   const found = IDEA_STATUS_OPTIONS.find((s) => s.value === status)
   return found ? found.type : 'info'
+}
+
+// 展示文案：内部状态值「已完成」对外显示为「已发布」，与其他模块（视频创作 / 发布数据）一致
+export function ideaStatusLabel(status) {
+  const found = IDEA_STATUS_OPTIONS.find((s) => s.value === status)
+  return found ? found.label : (status || '')
 }
 
 /* ================= 创作排期优先级 ================= */

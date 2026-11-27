@@ -282,6 +282,7 @@ def _mark_duplicate(result: dict, db: Session, exclude_id: int | None = None) ->
 @router.post("/parse", response_model=ParseResultOut)
 def parse_idea(
     payload: ShareTextIn,
+    expand: bool | None = None,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -291,7 +292,9 @@ def parse_idea(
     仍返回文本解析结果并提示手工补充，不阻塞收集流程。
     同时按抖音视频 ID 判重，命中时通过 duplicate_id / duplicate_title 返回提示。
     """
-    result = parse_share_text(payload.text, expand=True)
+    # expand 优先取 query 参数（兼容 ?expand=false 跳过外网），其次取 body
+    do_expand = payload.expand if expand is None else expand
+    result = parse_share_text(payload.text, expand=do_expand)
     result.setdefault("author_id", "")
     result.setdefault("cover", "")
     result.setdefault("play_count", 0)
@@ -311,7 +314,7 @@ def parse_idea(
         result["message"] = "该视频已收集，无需重复抓取视频数据"
         return result
 
-    if not payload.auto_fetch or not target:
+    if not payload.auto_fetch or not do_expand or not target:
         return result
 
     try:
