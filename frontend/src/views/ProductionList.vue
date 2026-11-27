@@ -171,8 +171,23 @@
           <el-table-column label="操作" min-width="120" fixed="right" align="center">
             <template #default="{ row }">
               <div class="adm-cell-actions">
-                <el-button v-if="perm.can('productions.edit')" type="text" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-if="perm.can('productions.delete')" type="text" size="small" class="danger-text" @click="remove(row)">删除</el-button>
+                <el-button
+                  v-if="perm.can('productions.edit')"
+                  type="text"
+                  size="small"
+                  :disabled="!canEditOwn(row)"
+                  :title="canEditOwn(row) ? '编辑制作' : '只能编辑自己创建的创作'"
+                  @click="openEdit(row)"
+                >编辑</el-button>
+                <el-button
+                  v-if="perm.can('productions.delete')"
+                  type="text"
+                  size="small"
+                  class="danger-text"
+                  :disabled="!canEditOwn(row)"
+                  :title="canEditOwn(row) ? '删除制作' : '只能删除自己创建的创作'"
+                  @click="remove(row)"
+                >删除</el-button>
               </div>
             </template>
           </el-table-column>
@@ -747,13 +762,19 @@ function removeEditCharacter(id) {
   edit.form.characterIds = edit.form.characterIds.filter((x) => x !== id)
 }
 
-// 制作中/待发布/废弃状态可点击流转；拥有「编辑制作」权限即可，不再限定归属人
+// 视频创作：只有归属人或管理员可编辑/删除；他人按钮显示但禁用
+function canEditOwn(row) {
+  return !!(row.is_owner || auth.isAdmin)
+}
+
+// 制作中/待发布/废弃状态可点击流转；同时限定归属人
 function canChangeStatus(row) {
-  return perm.can('productions.edit')
+  return perm.can('productions.edit') && canEditOwn(row)
 }
 
 function statusClickTitle(row) {
-  if (!canChangeStatus(row)) return '需要有编辑制作权限'
+  if (!perm.can('productions.edit')) return '需要有编辑制作权限'
+  if (!canEditOwn(row)) return '只能修改自己创建的创作'
   if (row.status === '制作中') return '点击确认完成并进入待发布'
   if (row.status === '待发布') return '点击选择返工或废弃'
   if (row.status === '废弃') return '点击确认还原为待发布'

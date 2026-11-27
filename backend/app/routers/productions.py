@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from ..auth import get_current_user, is_admin, require_create, require_permission, scope_filter
+from ..auth import (
+    ensure_owner,
+    get_current_user,
+    is_admin,
+    require_create,
+    require_permission,
+    scope_filter,
+)
 from ..database import get_db
 from ..models import (
     Category,
@@ -386,6 +393,7 @@ def update_production(
     if not production:
         raise HTTPException(status_code=404, detail="制作记录不存在")
     require_permission(user, "productions.edit", db)
+    ensure_owner(production, user, "编辑")
     # 制作人归属只允许管理员改，避免普通成员把记录转给他人
     if "owner_id" in data.model_fields_set and not is_admin(user):
         raise HTTPException(status_code=403, detail="仅管理员可修改制作人")
@@ -417,6 +425,7 @@ def delete_production(
     if not production:
         raise HTTPException(status_code=404, detail="制作记录不存在")
     require_permission(user, "productions.delete", db)
+    ensure_owner(production, user, "删除")
     drop_tags(db, production.tags)
     db.delete(production)
     db.commit()
