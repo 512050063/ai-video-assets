@@ -65,9 +65,10 @@ export function planPriorityLabel(priority) {
 
 /* ================= 视频制作 ================= */
 // 制作四态与创意全流程后四态一致：制作中 → 待发布 → 废弃 / 已完成
+// 颜色与 IDEA_STATUS_OPTIONS 保持统一：制作中=primary(蓝)、待发布=warning(橙)、废弃=info、已完成=success
 export const PRODUCTION_STATUS_OPTIONS = [
-  { value: '制作中', type: 'warning', label: '制作中' },
-  { value: '待发布', type: 'primary', label: '待发布' },
+  { value: '制作中', type: 'primary', label: '制作中' },
+  { value: '待发布', type: 'warning', label: '待发布' },
   { value: '废弃', type: 'info', label: '已废弃' },
   { value: '已完成', type: 'success', label: '已发布' }
 ]

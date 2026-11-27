@@ -348,15 +348,17 @@ def run_migrations():
         # 流程状态映射到新5态：未使用 / 已排期 / 制作中 / 待发布 / 已完成
         # 「备选库」不再是状态，改为独立备选标记 is_backup；历史备选库→未使用+点亮标记
         # 先映射制作记录状态（旧：制作中/已完成/已发布 → 新：制作中/待发布/已完成）
-        status_rank = {"制作中": 1, "待发布": 2, "已完成": 3}
-        if _table_exists(conn, "productions"):
+        # 注意：此映射是一次性历史迁移，必须带守卫。此前无守卫导致每次启动都把
+        # 「已完成」（=已发布）重新降级为「待发布」，使已发布作品状态被反复打回。
+        status_rank = {"制作中": 1, "待发布": 2, "已完成": 3, "废弃": 4}
+        if _table_exists(conn, "productions") and not _migration_done(conn, "status_map_v2"):
             try:
                 rows = conn.exec_driver_sql(
                     "SELECT id, status FROM productions ORDER BY id"
                 ).fetchall()
                 prod_map = {
                     "制作中": "制作中",
-                    "已完成": "待发布",   # 成片完成、待发布
+                    "已完成": "待发布",   # 历史旧库中「已完成」表示成片完成、待发布
                     "已发布": "已完成",   # 发布完成 = 全流程完成
                     "待发布": "待发布",
                 }
@@ -368,8 +370,11 @@ def run_migrations():
                         )
             except Exception as exc:  # pragma: no cover
                 logging.warning("制作记录状态迁移失败: %s", exc)
+            _mark_migration(conn, "status_map_v2")
         # 再由制作记录推导创意权威状态（取最靠后阶段）
-        if _table_exists(conn, "ideas"):
+        # 同样加一次性守卫：此前无守卫，每次启动都重算，且 status_rank 不含「废弃」，
+        # 导致用户在视频创作里改为「废弃」的创意被反复改回「未使用」，创作计划显示丢失。
+        if _table_exists(conn, "ideas") and not _migration_done(conn, "idea_derive_v2"):
             try:
                 # 历史「备选库」→「未使用」并点亮备选标记（一次性迁移）
                 backup_ids = {
@@ -380,7 +385,7 @@ def run_migrations():
                 conn.exec_driver_sql(
                     "UPDATE ideas SET status='未使用', is_backup=1 WHERE status='备选库'"
                 )
-                known_statuses = ("未使用", "已排期", "制作中", "待发布", "已完成")
+                known_statuses = ("未使用", "已排期", "制作中", "待发布", "废弃", "已完成")
                 rows = conn.exec_driver_sql(
                     "SELECT id, status FROM ideas ORDER BY id"
                 ).fetchall()
@@ -405,6 +410,9 @@ def run_migrations():
                         # 明确设置的「未使用」不再被 has_plan 反向推导覆盖
                         # （备选标记是纯标记，状态由用户显式控制）
                         best = "未使用"
+                    elif old_status == "废弃":
+                        # 用户显式废弃的创意必须保留，不能被当成非法状态打回「未使用」
+                        best = "废弃"
                     else:
                         # 历史状态缺失/非法的记录统一回到「未使用」
                         best = "未使用"
@@ -433,6 +441,7 @@ def run_migrations():
                             )
             except Exception as exc:  # pragma: no cover
                 logging.warning("创意流程状态迁移失败: %s", exc)
+            _mark_migration(conn, "idea_derive_v2")
         try:
             conn.exec_driver_sql(
                 "CREATE INDEX IF NOT EXISTS ix_productions_idea_id ON productions (idea_id)"
@@ -492,6 +501,43 @@ def run_migrations():
             except Exception as exc:  # pragma: no cover
                 logging.warning("流程状态漂移修复失败: %s", exc)
             _mark_migration(conn, "workflow_status_v1")
+
+        # ---- 1d. 一次性修复：撤销无守卫迁移反复执行造成的状态打回 ----
+        # 背景：status_map_v2 / idea_derive_v2 之前无守卫，每次启动都把「已完成」降级为
+        # 「待发布」，并把「废弃」创意改成「未使用」。此处按权威事实重建一次：
+        #   - 有发布绑定（publish_stats / douyin_imports / published_video_id）的制作记录 = 已完成（已发布）
+        #   - 其余制作记录保持非「已完成」状态（待发布 / 制作中 / 废弃）
+        #   - 创意状态严格投影为对应制作记录状态（含废弃），无制作记录的创意保持原状
+        if not _migration_done(conn, "status_repair_20261127"):
+            try:
+                prows = conn.exec_driver_sql(
+                    "SELECT id, status, COALESCE(published_video_id,'') FROM productions"
+                ).fetchall()
+                for r in prows:
+                    pid, st, pvid = r[0], r[1] or "", r[2] or ""
+                    has_ps = conn.exec_driver_sql(
+                        "SELECT 1 FROM publish_stats WHERE production_id=? LIMIT 1", (pid,)
+                    ).fetchone()
+                    has_di = conn.exec_driver_sql(
+                        "SELECT 1 FROM douyin_imports WHERE production_id=? LIMIT 1", (pid,)
+                    ).fetchone()
+                    if pvid or has_ps or has_di:
+                        if st != "已完成":
+                            conn.exec_driver_sql(
+                                "UPDATE productions SET status='已完成' WHERE id=?", (pid,)
+                            )
+            except Exception as exc:  # pragma: no cover
+                logging.warning("状态修复（制作记录）失败: %s", exc)
+            try:
+                # 严格投影：有制作记录的创意，状态 = 该制作记录状态（含废弃 / 已完成）
+                conn.exec_driver_sql(
+                    "UPDATE ideas SET status = ("
+                    "  SELECT p.status FROM productions p WHERE p.idea_id = ideas.id LIMIT 1"
+                    ") WHERE EXISTS (SELECT 1 FROM productions p WHERE p.idea_id = ideas.id)"
+                )
+            except Exception as exc:  # pragma: no cover
+                logging.warning("状态修复（创意投影）失败: %s", exc)
+            _mark_migration(conn, "status_repair_20261127")
 
         # ---- 2. 旧数据迁移 ----
         # 仅在新表为空时执行一次，避免旧 id 与新自增 id 撞车
