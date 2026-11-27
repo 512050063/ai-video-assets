@@ -471,7 +471,7 @@
       <DialogHeader
         :icon="Connection"
         title="匹配参考视频创作记录"
-        sub="绿色标记为当前已关联的记录；其余仅展示状态为「待发布」的创作记录，选定后写入本行数据"
+        sub="绿色标记为当前已关联的记录；其余仅展示未关联且状态为「待发布」的创作记录"
         tone="coral"
       />
     </template>
@@ -518,8 +518,16 @@
           <div class="match-option-info">
             <div class="batch-title">{{ p.title || '未命名视频' }}</div>
             <div class="auto-nums match-option-tags">
-              <el-tag size="small" effect="plain" class="match-owner-tag">@{{ p.author || '未获取作者' }}</el-tag>
+              <span class="match-option-author">@{{ p.author || '未获取作者' }}</span>
               <el-tag size="small" effect="plain" class="match-owner-tag">{{ p.owner_name || '未归属' }}</el-tag>
+              <OptionBadge
+                v-if="p.category_name"
+                :name="p.category_name"
+                :color="settings.option('category', p.category_name).color"
+                :image="settings.option('category', p.category_name).image"
+                :display="settings.option('category', p.category_name).display"
+                class="match-category-badge"
+              />
             </div>
           </div>
           <el-icon v-if="matchDialog.productionId === p.id" class="match-check"><Check /></el-icon>
@@ -1088,8 +1096,10 @@ async function openMatchDialog(row) {
   matchDialog.loading = true
   matchDialog.visible = true
   try {
+    const matchParams = { scope: scope.value }
+    if (matchDialog.currentId) matchParams.exclude_production_id = matchDialog.currentId
     const [{ data: list }, detail] = await Promise.all([
-      api.get('/productions', { params: { scope: scope.value, status: '待发布', page_size: 200 } }),
+      api.get('/publish-stats/match-options', { params: matchParams }),
       matchDialog.currentId
         ? api.get(`/productions/${matchDialog.currentId}`).catch(() => null)
         : Promise.resolve(null)
@@ -1107,7 +1117,8 @@ async function openMatchDialog(row) {
       cover: p.cover || '',
       author: p.author || '',
       status: p.status || '',
-      owner_name: p.owner_name || ''
+      owner_name: p.owner_name || '',
+      category_name: p.category_name || ''
     }))
   } catch (e) {
     matchDialog.options = []
@@ -1505,13 +1516,15 @@ onMounted(async () => {
 .manual-metrics label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--adm-text-secondary); }
 .manual-metrics :deep(.el-input-number) { flex: 1; min-width: 0; }
 
-.match-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.match-body { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; box-sizing: border-box; }
 .match-source { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--adm-border); border-radius: 10px; background: var(--adm-panel-soft); }
 .match-search { width: 100%; }
-/* 列表区独立滚动：弹窗整体限高后，头部与底部按钮常驻，选项在内容区滚动 */
-.match-options { display: flex; flex-direction: column; gap: 8px; padding-right: 4px; flex: 1; min-height: 0; max-height: 52vh; overflow-y: auto; }
+/* 列表区独立滚动：弹窗整体限高后，头部与底部按钮常驻，只保留这一条滚动条 */
+.match-options { display: flex; flex-direction: column; gap: 8px; padding-right: 4px; flex: 1; min-height: 0; box-sizing: border-box; overflow-y: auto; overscroll-behavior: contain; }
 .match-option-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .match-owner-tag { font-size: 11px; height: 20px; line-height: 18px; }
+.match-option-author { font-size: 12px; color: var(--adm-text-secondary); white-space: nowrap; }
+.match-category-badge { max-width: 120px; min-width: 0; flex-shrink: 0; }
 .match-option {
   display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer;
   border: 1px solid var(--adm-border); border-radius: 10px; background: var(--adm-panel-soft);

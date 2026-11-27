@@ -127,7 +127,7 @@
               <button
                 type="button"
                 class="prod-status-btn"
-                :disabled="!canChangeStatus(row) || !['制作中', '待发布'].includes(row.status)"
+                :disabled="!canChangeStatus(row) || !['制作中', '待发布', '搁置中'].includes(row.status)"
                 :title="statusClickTitle(row)"
                 @click="openStatusConfirm(row)"
               >
@@ -427,6 +427,29 @@
       @confirm="doChangeStatus"
     />
 
+    <!-- 待发布→选择制作 / 搁置 -->
+    <el-dialog
+      v-model="statusChoice.visible"
+      title="选择状态"
+      width="420px"
+      class="adm-dialog-detail status-choice-dialog"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <div class="status-choice-body">
+        <div class="status-choice-title">{{ statusChoice.row?.title || '该视频' }}</div>
+        <el-radio-group v-model="statusChoice.target" class="status-choice-group">
+          <el-radio-button label="制作中">制作</el-radio-button>
+          <el-radio-button label="搁置中">搁置</el-radio-button>
+        </el-radio-group>
+        <p class="status-choice-tip">选择「制作」返回制作中；选择「搁置」标记为已搁置，之后再点状态可还原为待发布。</p>
+      </div>
+      <template #footer>
+        <el-button @click="statusChoice.visible = false">取消</el-button>
+        <el-button type="primary" :loading="statusChoice.loading" @click="doStatusChoice">确认</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 制作中→确认完成：选择完成时间（默认今天，只选日期） -->
     <el-dialog
       v-model="completeDialog.visible"
@@ -503,7 +526,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { CircleCheckFilled, Loading, Plus, Search, Timer, VideoCamera, VideoPlay } from '@element-plus/icons-vue'
+import { CircleCheckFilled, Loading, Plus, Search, Timer, VideoCamera, VideoPlay, Warning } from '@element-plus/icons-vue'
 import PageHeader from '../components/PageHeader.vue'
 import AppPagination from '../components/ui/AppPagination.vue'
 import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
@@ -534,6 +557,8 @@ const statusConfirm = reactive({
   visible: false, loading: false, row: null, target: '',
   title: '', message: '', confirmText: '', variant: 'success', icon: 'success'
 })
+// 待发布→制作 / 搁置：两个选项，默认回到制作
+const statusChoice = reactive({ visible: false, loading: false, row: null, target: '制作中' })
 // 制作中→待发布：选择完成日期（默认今天）
 const completeDialog = reactive({ visible: false, loading: false, row: null, date: '' })
 
@@ -548,13 +573,14 @@ function disableFutureDate(date) {
   now.setHours(23, 59, 59, 999)
   return date.getTime() > now.getTime()
 }
-// 四项统计：内部「已完成」在展示层即为「已发布」
+// 五项统计：内部「已完成 / 搁置中」展示为「已发布 / 已搁置」
 const counts = computed(() => {
   const all = list.value
   return {
     total: all.length,
     making: all.filter((i) => i.status === '制作中').length,
     pending: all.filter((i) => i.status === '待发布').length,
+    shelved: all.filter((i) => i.status === '搁置中').length,
     published: all.filter((i) => i.status === '已完成').length
   }
 })
@@ -563,6 +589,7 @@ const statCards = computed(() => [
   { label: '创作总量', value: counts.value.total, icon: VideoCamera, tone: 'blue' },
   { label: '制作中', value: counts.value.making, icon: Loading, tone: 'lilac' },
   { label: '待发布', value: counts.value.pending, icon: Timer, tone: 'amber' },
+  { label: '已搁置', value: counts.value.shelved, icon: Warning, tone: 'amber' },
   { label: '已发布', value: counts.value.published, icon: CircleCheckFilled, tone: 'mint' }
 ])
 
@@ -705,7 +732,7 @@ function removeEditCharacter(id) {
   edit.form.characterIds = edit.form.characterIds.filter((x) => x !== id)
 }
 
-// 制作中/待发布状态可点击确认流转；已完成只读
+// 制作中/待发布/搁置中状态可点击流转；已完成只读
 function canChangeStatus(row) {
   return perm.can('productions.edit') && (row.is_owner || auth.isAdmin)
 }
@@ -713,7 +740,8 @@ function canChangeStatus(row) {
 function statusClickTitle(row) {
   if (!canChangeStatus(row)) return '仅归属人或管理员可改'
   if (row.status === '制作中') return '点击确认完成并进入待发布'
-  if (row.status === '待发布') return '点击确认还原为制作中'
+  if (row.status === '待发布') return '点击选择制作或搁置'
+  if (row.status === '搁置中') return '点击确认还原为待发布'
   return productionStatusLabel(row.status)
 }
 
@@ -726,7 +754,7 @@ function missingProductionInfo(row) {
   return missing
 }
 
-// 制作中点状态：校验信息完整后确认完成→待发布；待发布点状态：确认还原→制作中
+// 制作中点状态：校验信息完整后确认完成→待发布；待发布点状态：选制作/搁置；搁置中点状态：还原为待发布
 function openStatusConfirm(row) {
   if (!canChangeStatus(row)) return
   if (row.status === '制作中') {
@@ -741,9 +769,15 @@ function openStatusConfirm(row) {
     completeDialog.visible = true
     return
   } else if (row.status === '待发布') {
-    statusConfirm.target = '制作中'
-    statusConfirm.title = '还原为制作中'
-    statusConfirm.message = `确定将「${row.title || '该视频'}」还原为「制作中」吗？`
+    // 待发布→制作 / 搁置，两个选项由用户选择
+    statusChoice.row = row
+    statusChoice.target = '制作中'
+    statusChoice.visible = true
+    return
+  } else if (row.status === '搁置中') {
+    statusConfirm.target = '待发布'
+    statusConfirm.title = '还原为待发布'
+    statusConfirm.message = `确定将「${row.title || '该视频'}」从已搁置还原为「待发布」吗？`
     statusConfirm.confirmText = '确认还原'
     statusConfirm.variant = 'warning'
     statusConfirm.icon = 'warning'
@@ -763,12 +797,31 @@ async function doChangeStatus() {
     row.status = data.status
     row.produced_at = data.produced_at
     row.completed_at = data.completed_at
-    ElMessage.success(`状态已改为「${data.status}」`)
+    ElMessage.success(`状态已改为「${productionStatusLabel(data.status)}」`)
     statusConfirm.visible = false
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '状态修改失败')
   } finally {
     statusConfirm.loading = false
+  }
+}
+
+// 待发布选择「制作 / 搁置」后写入状态
+async function doStatusChoice() {
+  const row = statusChoice.row
+  if (!row) return
+  statusChoice.loading = true
+  try {
+    const { data } = await api.put(`/productions/${row.id}`, { status: statusChoice.target })
+    row.status = data.status
+    row.produced_at = data.produced_at
+    row.completed_at = data.completed_at
+    ElMessage.success(`状态已改为「${productionStatusLabel(data.status)}」`)
+    statusChoice.visible = false
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '状态修改失败')
+  } finally {
+    statusChoice.loading = false
   }
 }
 
@@ -898,6 +951,12 @@ onMounted(async () => {
   background: var(--adm-blue-bg, #eef4ff);
 }
 .prod-status-btn:disabled { cursor: default; }
+
+/* 待发布→制作/搁置：状态选择弹窗 */
+.status-choice-body { display: flex; flex-direction: column; gap: 12px; }
+.status-choice-title { font-size: 13px; font-weight: 600; color: var(--adm-text-primary); }
+.status-choice-group { display: flex; gap: 8px; }
+.status-choice-tip { margin: 0; font-size: 12px; line-height: 1.6; color: var(--adm-text-secondary); }
 
 .char-cell { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .char-avatar { width: 48px; height: 48px; border-radius: 10px; border: 1px solid rgba(123, 163, 209, 0.2); display: block; flex-shrink: 0; background: var(--adm-panel-soft); }

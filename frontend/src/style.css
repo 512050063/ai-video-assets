@@ -966,7 +966,9 @@ html.dark .adm-tag-chip.is-more {
 .match-dialog.el-dialog .el-dialog__body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* 仅候选列表滚动，避免弹窗 body 与列表同时出现双滚动条 */
   padding-top: 12px;
   padding-bottom: 12px;
 }

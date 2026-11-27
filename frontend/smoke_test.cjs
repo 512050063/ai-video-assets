@@ -447,8 +447,8 @@ async function main() {
     body = await text(page.locator('body'))
     ok('视频创作页打开', resp.status() === 200 && body.includes('视频创作'))
     const prodStatLabels = (await page.locator('.stat-row .adm-stat .adm-stat-label').allInnerTexts()).map((t) => t.trim())
-    ok('创作统计标签改为四项', prodStatLabels.length === 4
-       && ['创作总量', '制作中', '待发布', '已发布'].every((s) => prodStatLabels.includes(s)),
+    ok('创作统计标签扩展为五项', prodStatLabels.length === 5
+       && ['创作总量', '制作中', '待发布', '已搁置', '已发布'].every((s) => prodStatLabels.includes(s)),
        prodStatLabels.join('|'))
     const prodHeaders = (await page.locator('.el-table__header th .cell').allInnerTexts()).map((t) => t.trim())
     ok('含创作时间列', prodHeaders.includes('创作时间'), prodHeaders.join('|'))
@@ -637,6 +637,43 @@ async function main() {
       await page.waitForTimeout(300)
     }
 
+    // 待发布→制作/搁置→还原待发布
+    if (testProdId) {
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.waitForTimeout(900)
+      await page.locator('.el-table__body tr').filter({ hasText: '__SMOKE_FRONT__制作校验' }).first()
+        .locator('.prod-status-btn').click()
+      await page.waitForTimeout(400)
+      const sd = page.locator('.status-choice-dialog:visible')
+      ok('待发布点击状态弹制作/搁置选择', await sd.count() === 1)
+      if (await sd.count()) {
+        const radios = (await sd.locator('.el-radio-button').allInnerTexts()).map((x) => x.trim())
+        ok('状态选择项为制作/搁置', radios.join(',') === '制作,搁置', radios.join(','))
+        await sd.locator('.el-radio-button').filter({ hasText: '搁置' }).click()
+        await sd.getByRole('button', { name: '确认' }).click()
+        await page.waitForTimeout(600)
+        const shelved = await page.evaluate(async ({ t, id }) => {
+          const r = await fetch('/api/productions/' + id, { headers: { Authorization: 'Bearer ' + t } })
+          return r.ok ? await r.json() : null
+        }, { t: token, id: testProdId })
+        ok('选择搁置后状态写入搁置中', shelved && shelved.status === '搁置中', shelved && shelved.status)
+        await page.reload({ waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(900)
+        const shelvedRow = page.locator('.el-table__body tr').filter({ hasText: '__SMOKE_FRONT__制作校验' }).first()
+        ok('视频创作列表显示已搁置', (await shelvedRow.innerText()).includes('已搁置'))
+        await shelvedRow.locator('.prod-status-btn').click()
+        await page.waitForTimeout(400)
+        ok('已搁置点击状态弹还原确认', (await text(page.locator('.adm-confirm-card')).catch(() => '')).includes('还原为待发布'))
+        await page.locator('.adm-confirm-card .adm-confirm-btn.is-primary').click()
+        await page.waitForTimeout(600)
+        const restored = await page.evaluate(async ({ t, id }) => {
+          const r = await fetch('/api/productions/' + id, { headers: { Authorization: 'Bearer ' + t } })
+          return r.ok ? await r.json() : null
+        }, { t: token, id: testProdId })
+        ok('确认后还原为待发布', restored && restored.status === '待发布', restored && restored.status)
+      }
+    }
+
     /* ---------- 6b. 页头新增创作：不依赖参考视频 ---------- */
     section('6b. 页头新增创作：必填校验 / 默认值')
     await page.reload({ waitUntil: 'domcontentloaded' })
@@ -748,7 +785,7 @@ async function main() {
     await page.locator('.adm-status-bar .adm-tab-chip').first().click()
     await page.waitForTimeout(400)
 
-    // 匹配创作记录弹窗：列表都是待发布，不显示"待发布"状态，作者/创作者用标签，高度不溢出
+    // 匹配创作记录弹窗：列表都是待发布，不显示"待发布"状态，作者/创作者用标签，仅列表区滚动
     await page.evaluate(() => {
       const vueApp = document.querySelector('#app')?.__vue_app__
       const seen = new Set()
@@ -762,8 +799,8 @@ async function main() {
           st.matchDialog.keyword = ''
           st.matchDialog.currentId = null
           st.matchDialog.options = [
-            { id: 9001, title: '__SMOKE__匹配项1', author: 'Lu小器', status: '待发布', owner_name: '创作者甲' },
-            { id: 9002, title: '__SMOKE__匹配项2', author: '小寒', status: '待发布', owner_name: '创作者乙' }
+            { id: 9001, title: '__SMOKE__匹配项1', author: 'Lu小器', status: '待发布', owner_name: '创作者甲', category_name: '舞蹈' },
+            { id: 9002, title: '__SMOKE__匹配项2', author: '小寒', status: '待发布', owner_name: '创作者乙', category_name: '音乐' }
           ]
           return true
         }
@@ -787,14 +824,32 @@ async function main() {
     if (await mdlg.count()) {
       const nums = await mdlg.locator('.match-option:not(.is-current) .auto-nums').allInnerTexts()
       ok('匹配列表不显示待发布状态', nums.every(t => !t.includes('待发布')), nums.join(' | '))
-      ok('匹配列表作者/创作者用标签展示', await mdlg.locator('.match-owner-tag').count() >= 4,
-         'tags=' + await mdlg.locator('.match-owner-tag').count())
+      const authorTexts = await mdlg.locator('.match-option-author').allInnerTexts()
+      ok('匹配列表作者用@纯文本展示', authorTexts.length >= 2 && authorTexts.every((t) => t.trim().startsWith('@')),
+         authorTexts.join(' | '))
+      ok('匹配列表仅创作者用标签', await mdlg.locator('.match-owner-tag').count() >= 2
+         && await mdlg.locator('.match-option-author.el-tag').count() === 0,
+         'ownerTags=' + await mdlg.locator('.match-owner-tag').count())
+      ok('作者后显示配置中心格式视频类型', await mdlg.locator('.match-category-badge').count() >= 2,
+         'badges=' + await mdlg.locator('.match-category-badge').count())
       const mLayout = await mdlg.evaluate(el => {
         const r = el.getBoundingClientRect()
         const foot = el.querySelector('.el-dialog__footer')
         return { overflow: r.bottom > innerHeight + 1, footVisible: foot ? foot.getBoundingClientRect().bottom <= innerHeight + 1 : null }
       })
       ok('匹配弹窗高度不溢出且按钮可见', !mLayout.overflow && mLayout.footVisible === true, JSON.stringify(mLayout))
+      const scrollInfo = await mdlg.evaluate(el => {
+        const body = el.querySelector('.el-dialog__body')
+        const list = el.querySelector('.match-options')
+        return {
+          bodyOverflow: body ? getComputedStyle(body).overflowY : 'missing',
+          listOverflow: list ? getComputedStyle(list).overflowY : 'missing',
+          bodyScrollable: body ? body.scrollHeight > body.clientHeight + 1 : null
+        }
+      })
+      ok('匹配弹窗仅候选列表滚动（无双滚动条）',
+         scrollInfo.bodyOverflow === 'hidden' && scrollInfo.listOverflow === 'auto' && !scrollInfo.bodyScrollable,
+         JSON.stringify(scrollInfo))
       await page.keyboard.press('Escape')
       await page.waitForTimeout(300)
     }

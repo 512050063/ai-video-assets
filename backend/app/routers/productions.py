@@ -29,8 +29,8 @@ from ..tag_service import collect_tags, drop_tags
 
 router = APIRouter(prefix="/productions", tags=["productions"])
 
-VALID_STATUSES = {"制作中", "待发布", "已完成"}
-# 制作记录状态与创意全流程状态一致（后三态）；发布数据另用 data_status 管理正常/隐藏/删除
+VALID_STATUSES = {"制作中", "待发布", "搁置中", "已完成"}
+# 制作记录状态与创意全流程状态一致（制作中/待发布/搁置中/已完成）；发布数据另用 data_status 管理正常/隐藏/删除
 # 兜底平台：配置中心可维护任意制作平台，实际校验以 system_settings.platforms 为准
 VALID_PLATFORMS = {"硬核", "小云雀", "三方平台"}
 VALID_ASSET_TYPES = {"cover", "reference_shot", "output"}
@@ -133,11 +133,11 @@ def _apply_in(db: Session, production: Production, data: ProductionIn):
             drop_tags(db, removed)
 
     # ---- 时间信息随状态自动流转 ----
-    # 制作中 → 开始时间；待发布 → 完成时间；已完成 → 发布时间（并补齐完成时间）
+    # 制作中 → 开始时间；待发布/搁置中 → 完成时间；已完成 → 发布时间（并补齐完成时间）
     now = datetime.now()
     if production.status == "制作中" and production.produced_at is None:
         production.produced_at = now
-    if production.status == "待发布" and production.completed_at is None:
+    if production.status in ("待发布", "搁置中") and production.completed_at is None:
         production.completed_at = now
     if production.status == "已完成":
         if production.published_at is None:
@@ -288,13 +288,13 @@ def list_productions(
         q = q.filter(or_(Production.title.like(like), Production.remark.like(like)))
     if status:
         q = q.filter(Production.status == status)
-    # 视频创作页看 制作中 / 待发布（active）；发布数据页看 已完成
+    # 视频创作页看 制作中 / 待发布 / 搁置中（active）；发布数据页看 待发布 / 搁置中 / 已完成
     if stage == "making":
         q = q.filter(Production.status == "制作中")
     elif stage == "active":
-        q = q.filter(Production.status.in_(["制作中", "待发布"]))
+        q = q.filter(Production.status.in_(["制作中", "待发布", "搁置中"]))
     elif stage == "finished":
-        q = q.filter(Production.status.in_(["待发布", "已完成"]))
+        q = q.filter(Production.status.in_(["待发布", "搁置中", "已完成"]))
     if platform:
         q = q.filter(Production.platform == platform)
     if character_id is not None:

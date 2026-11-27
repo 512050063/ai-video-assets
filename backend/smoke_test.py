@@ -25,7 +25,7 @@ DETAILS = []
 
 TOKEN = None
 CREATED = {"ideas": [], "categories": [], "characters": [], "productions": [],
-           "stats": [], "users": [], "uploads": [], "accounts": [],
+           "stats": [], "users": [], "uploads": [], "accounts": [], "imports": [],
            "material_libraries": [], "materials": [], "vote_records": []}
 
 
@@ -114,6 +114,12 @@ def cleanup():
     for lid in reversed(CREATED.get("material_libraries", [])):
         try:
             req("DELETE", "/material-libraries/" + str(lid))
+        except Exception:
+            pass
+    for iid in reversed(CREATED.get("imports", [])):
+        try:
+            code, _ = req("DELETE", "/publish-stats/imports/" + str(iid))
+            print("  DELETE imports/%s -> %s" % (iid, code))
         except Exception:
             pass
     for key in ("stats", "productions", "ideas", "characters", "categories", "users"):
@@ -994,6 +1000,42 @@ def run():
         code, deleted = req("PUT", "/publish-stats/status/%s" % target_pid, {"status": "删除"})
         ok("已下线的删除状态返回 400", code == 400, deleted)
 
+    section("15f-2. 匹配候选项：只列未关联的待发布创作")
+    candidate_chars = [{"character_id": ch_id, "role": "主角", "sort": 0}] if ch_id else []
+    code, pend_free = req("POST", "/productions", {
+        "title": PREFIX + "匹配候选未关联", "category_id": cat_id, "platform": "硬核",
+        "prompt": [{"seg": "", "text": "未关联候选"}], "characters": candidate_chars,
+        "status": "待发布"})
+    code, pend_linked = req("POST", "/productions", {
+        "title": PREFIX + "匹配候选已关联", "category_id": cat_id, "platform": "硬核",
+        "prompt": [{"seg": "", "text": "已关联候选"}], "characters": candidate_chars,
+        "status": "待发布"})
+    free_id = pend_free.get("id") if isinstance(pend_free, dict) else None
+    linked_id = pend_linked.get("id") if isinstance(pend_linked, dict) else None
+    for pid in (free_id, linked_id):
+        if pid:
+            CREATED["productions"].append(pid)
+    if free_id and linked_id:
+        code, link_stat = req("POST", "/publish-stats", {
+            "production_id": linked_id, "plays": 9, "likes": 1})
+        if isinstance(link_stat, dict) and link_stat.get("id"):
+            CREATED["stats"].append(link_stat["id"])
+        # 人为回退到待发布，验证「已关联」过滤不只依赖状态
+        req("PUT", "/productions/%s" % linked_id, {"status": "待发布"})
+        code, opts = req("GET", "/publish-stats/match-options")
+        opt_items = opts.get("items", []) if isinstance(opts, dict) else []
+        opt_ids = [x.get("id") for x in opt_items]
+        ok("匹配候选排除已关联创作", code == 200 and free_id in opt_ids and linked_id not in opt_ids,
+           "free=%s linked=%s ids=%s" % (free_id, linked_id, opt_ids))
+        ok("匹配候选仅为待发布且含展示字段", all(
+            x.get("status") == "待发布"
+            and all(k in x for k in ("title", "cover", "author", "owner_name", "category_name"))
+            for x in opt_items), opt_items[:2])
+        code, opts_ex = req("GET", "/publish-stats/match-options?exclude_production_id=%s" % free_id)
+        ex_ids = [x.get("id") for x in opts_ex.get("items", [])] if isinstance(opts_ex, dict) else []
+        ok("匹配候选可排除当前关联项", code == 200 and free_id not in ex_ids,
+           "free=%s ids=%s" % (free_id, ex_ids))
+
     section("15g. 我的账号扩展字段：状态/更新节奏/责任人")
     code, creators = req("GET", "/publish-accounts/creators")
     ok("责任人候选可用", code == 200 and isinstance(creators, list) and len(creators) >= 1
@@ -1484,6 +1526,51 @@ def run():
         s.close()
     except Exception as exc:
         ok("账号更新总入口进程内验证", False, str(exc))
+
+    section("15k. 状态联动：搁置中 / 发布绑定后创意与创作同步已发布")
+    code, link_idea = req("POST", "/ideas", {"title": PREFIX + "状态联动创意"})
+    link_idea_id = link_idea.get("id") if isinstance(link_idea, dict) else None
+    if link_idea_id:
+        CREATED["ideas"].append(link_idea_id)
+    code, link_prod = req("POST", "/productions", {
+        "title": PREFIX + "状态联动制作", "category_id": cat_id, "platform": "硬核",
+        "prompt": [{"seg": "", "text": "状态联动"}],
+        "characters": [{"character_id": ch_id, "role": "主角", "sort": 0}] if ch_id else [],
+        "idea_id": link_idea_id, "status": "待发布"})
+    link_prod_id = link_prod.get("id") if isinstance(link_prod, dict) else None
+    if link_prod_id:
+        CREATED["productions"].append(link_prod_id)
+    if link_idea_id and link_prod_id:
+        code, shelved = req("PUT", "/productions/%s" % link_prod_id, {"status": "搁置中"})
+        _, idea_shelved = req("GET", "/ideas/%s" % link_idea_id)
+        ok("待发布可改为搁置中", code == 200 and shelved.get("status") == "搁置中", shelved.get("status"))
+        ok("搁置中同步到创意灵感", idea_shelved.get("status") == "搁置中", idea_shelved.get("status"))
+        code, restored = req("PUT", "/productions/%s" % link_prod_id, {"status": "待发布"})
+        _, idea_restored = req("GET", "/ideas/%s" % link_idea_id)
+        ok("搁置中可还原待发布", code == 200 and restored.get("status") == "待发布", restored.get("status"))
+        ok("还原待发布同步到创意灵感", idea_restored.get("status") == "待发布", idea_restored.get("status"))
+
+        bind_vid = PREFIX + "状态联动绑定视频"
+        req("POST", "/publish-stats/import-douyin", {"videos": [{
+            "video_id": bind_vid, "title": PREFIX + "状态联动采集作品", "plays": 42, "likes": 6}]})
+        _, imports = req("GET", "/publish-stats/imports?status=待匹配")
+        bind_row = next((x for x in (imports if isinstance(imports, list) else [])
+                         if x.get("video_id") == bind_vid), None)
+        bind_id = bind_row.get("id") if bind_row else None
+        if bind_id:
+            CREATED["imports"].append(bind_id)
+            code, matched = req("POST", "/publish-stats/imports/%s/match" % bind_id,
+                                {"production_id": link_prod_id})
+            ok("发布数据绑定创作记录成功", code == 200 and matched.get("production_id") == link_prod_id,
+               matched.get("production_id") if isinstance(matched, dict) else matched)
+            _, prod_after = req("GET", "/productions/%s" % link_prod_id)
+            _, idea_after = req("GET", "/ideas/%s" % link_idea_id)
+            ok("绑定后创作记录更新为已发布", prod_after.get("status") == "已完成", prod_after.get("status"))
+            ok("绑定后创意灵感同步为已发布", idea_after.get("status") == "已完成", idea_after.get("status"))
+            _, bind_stats = req("GET", "/publish-stats?production_id=%s" % link_prod_id)
+            for st in (bind_stats if isinstance(bind_stats, list) else []):
+                if st.get("id") not in CREATED["stats"]:
+                    CREATED["stats"].append(st["id"])
 
     print("\n=== 清理 ===")
     cleanup()

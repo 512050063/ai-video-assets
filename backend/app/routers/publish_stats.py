@@ -389,9 +389,20 @@ def update_data_status(
     }
 
 
+def _sync_idea_status(db: Session, production: Production) -> None:
+    """制作记录状态变化时同步来源创意，避免两页状态不一致。"""
+    if not production.idea_id:
+        return
+    idea = db.query(Idea).get(production.idea_id)
+    if idea and idea.status != production.status:
+        idea.status = production.status
+        idea.updated_at = datetime.now()
+
+
 def _advance_production(db: Session, production: Production) -> None:
     """录入数据即视为发布完成：制作记录与来源创意推进到「已完成」。"""
     if production.status == "已完成":
+        _sync_idea_status(db, production)
         return
     now = datetime.now()
     production.status = "已完成"
@@ -400,11 +411,7 @@ def _advance_production(db: Session, production: Production) -> None:
     if production.completed_at is None:
         production.completed_at = now
     production.updated_at = now
-    if production.idea_id:
-        idea = db.query(Idea).get(production.idea_id)
-        if idea and idea.status != "已完成":
-            idea.status = "已完成"
-            idea.updated_at = now
+    _sync_idea_status(db, production)
 
 
 def _apply_stat_values(stat: PublishStat, data: PublishStatIn) -> None:
@@ -681,6 +688,56 @@ def update_import_status(
     return {"ok": True, "import_id": import_id, "data_status": row.data_status}
 
 
+@router.get("/match-options")
+def match_options(
+    scope: str = "all",
+    exclude_production_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """匹配弹窗候选项：仅返回未关联到发布数据的「待发布」创作记录。
+
+    已被采集作品或数据快照关联的创作记录不再作为候选；当前已关联项由前端
+    单独置顶展示，可通过 exclude_production_id 从候选列表中剔除。
+    """
+    linked_ids = {
+        row[0]
+        for row in db.query(DouyinImport.production_id)
+        .filter(DouyinImport.production_id.isnot(None))
+        .all()
+    }
+    linked_ids |= {
+        row[0]
+        for row in db.query(PublishStat.production_id)
+        .filter(PublishStat.production_id.isnot(None))
+        .all()
+    }
+
+    q = db.query(Production).options(joinedload(Production.owner), joinedload(Production.category))
+    q = scope_filter(q, Production, user, scope)
+    q = q.filter(Production.status == "待发布")
+    if linked_ids:
+        q = q.filter(~Production.id.in_(linked_ids))
+    if exclude_production_id is not None:
+        q = q.filter(Production.id != exclude_production_id)
+    rows = q.order_by(Production.updated_at.desc().nullslast(), Production.id.desc()).all()
+
+    return {
+        "items": [
+            {
+                "id": p.id,
+                "title": p.title or "未命名视频",
+                "cover": p.cover or "",
+                "author": p.author or "",
+                "owner_name": (p.owner.nickname or p.owner.username) if p.owner else "未归属",
+                "category_name": p.category.name if p.category else "",
+                "status": p.status or "",
+            }
+            for p in rows
+        ]
+    }
+
+
 @router.post("/imports/{import_id}/match", response_model=DouyinImportItemOut)
 def match_import(
     import_id: int,
@@ -720,18 +777,17 @@ def match_import(
                 old_production.status = "待发布"
                 old_production.published_at = None
                 old_production.updated_at = datetime.now()
+                _sync_idea_status(db, old_production)
 
-    # 关联创作记录并推进到「已完成」
+    # 关联创作记录并推进到「已完成」：时间先按采集作品发布时间落位，再由 _upsert_stat 统一推进状态并同步创意
     row.production_id = production.id
     row.status = "已匹配"
     row.data_status = production.data_status or "正常"
     row.matched_at = datetime.now()
-    if production.status != "已完成":
-        production.status = "已完成"
-        if production.published_at is None:
-            production.published_at = published_at or datetime.now()
-        if production.completed_at is None:
-            production.completed_at = published_at or datetime.now()
+    if production.published_at is None:
+        production.published_at = published_at or datetime.now()
+    if production.completed_at is None:
+        production.completed_at = published_at or datetime.now()
     if row.account_id:
         production.publish_account_id = row.account_id
     if not production.publish_platform:
