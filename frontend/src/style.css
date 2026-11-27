@@ -957,7 +957,7 @@ html.dark .adm-tag-chip.is-more {
 /* 发布数据-匹配弹窗：整体限高，内容区滚动，头部与底部按钮常驻可见 */
 .match-dialog.el-dialog {
   top: 2vh;
-  max-height: 84vh;
+  max-height: 76vh;
   display: flex;
   flex-direction: column;
   margin-bottom: 0;

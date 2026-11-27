@@ -500,7 +500,9 @@
               {{ matchDialog.currentTitle || '当前关联创作记录' }}
               <span class="match-current-badge">当前关联</span>
             </div>
-            <div class="auto-nums">{{ productionStatusLabel(matchDialog.currentStatus) || '已发布' }} · {{ matchDialog.currentOwner || '未归属' }}</div>
+            <div class="auto-nums match-option-tags">
+              <el-tag size="small" effect="plain" class="match-owner-tag">{{ matchDialog.currentOwner || '未归属' }}</el-tag>
+            </div>
           </div>
           <el-icon v-if="matchDialog.productionId === matchDialog.currentId" class="match-check"><Check /></el-icon>
         </div>
@@ -515,7 +517,10 @@
           <span v-else class="match-option-cover is-empty">—</span>
           <div class="match-option-info">
             <div class="batch-title">{{ p.title || '未命名视频' }}</div>
-            <div class="auto-nums">{{ p.status }} · @{{ p.author || '未获取作者' }} · {{ p.owner_name || '未归属' }}</div>
+            <div class="auto-nums match-option-tags">
+              <el-tag size="small" effect="plain" class="match-owner-tag">@{{ p.author || '未获取作者' }}</el-tag>
+              <el-tag size="small" effect="plain" class="match-owner-tag">{{ p.owner_name || '未归属' }}</el-tag>
+            </div>
           </div>
           <el-icon v-if="matchDialog.productionId === p.id" class="match-check"><Check /></el-icon>
         </div>
@@ -1389,9 +1394,15 @@ onMounted(async () => {
   color: var(--adm-text-placeholder);
 }
 
-/* 详情弹窗内表格贴边，通栏显示 */
+/* 详情弹窗内表格贴边，通栏显示；表格自身承担横向滚动，避免滚动条冒到弹窗 body */
 .detail-table-wrap {
   margin: 0 -20px;
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+/* 弹窗 body 在 ≤1366px 下 padding 降为 16px，负边距同步收缩，避免通栏表格溢出 */
+@media (max-width: 1366px) {
+  .detail-table-wrap { margin: 0 -16px; }
 }
 
 .preview-player {
@@ -1494,10 +1505,13 @@ onMounted(async () => {
 .manual-metrics label { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--adm-text-secondary); }
 .manual-metrics :deep(.el-input-number) { flex: 1; min-width: 0; }
 
-.match-body { display: flex; flex-direction: column; gap: 12px; }
+.match-body { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
 .match-source { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--adm-border); border-radius: 10px; background: var(--adm-panel-soft); }
 .match-search { width: 100%; }
-.match-options { display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+/* 列表区独立滚动：弹窗整体限高后，头部与底部按钮常驻，选项在内容区滚动 */
+.match-options { display: flex; flex-direction: column; gap: 8px; padding-right: 4px; flex: 1; min-height: 0; max-height: 52vh; overflow-y: auto; }
+.match-option-tags { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.match-owner-tag { font-size: 11px; height: 20px; line-height: 18px; }
 .match-option {
   display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer;
   border: 1px solid var(--adm-border); border-radius: 10px; background: var(--adm-panel-soft);

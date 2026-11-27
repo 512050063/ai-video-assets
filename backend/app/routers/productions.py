@@ -105,6 +105,10 @@ def _apply_in(db: Session, production: Production, data: ProductionIn):
     if "owner_id" in provided and data.owner_id is not None:
         if not db.query(User).get(data.owner_id):
             raise HTTPException(status_code=400, detail="制作人不存在")
+    # 完成日期不能晚于今天（不能提前完成）；前端日期控件已禁用未来日期，后端兜底防止绕过
+    if "completed_at" in provided and data.completed_at is not None:
+        if data.completed_at.date() > datetime.now().date():
+            raise HTTPException(status_code=400, detail="完成日期不能晚于今天，不能提前完成")
 
     old_tags = list(production.tags or [])
     for field in (

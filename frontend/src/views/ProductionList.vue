@@ -476,6 +476,7 @@
             type="date"
             value-format="YYYY-MM-DD"
             placeholder="选择完成日期"
+            :disabled-date="disableFutureDate"
             style="width: 100%"
           />
         </div>
@@ -540,6 +541,12 @@ function todayString() {
   const d = new Date()
   const p = (n) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`
+}
+// 完成日期不能晚于今天（不能提前完成）：禁用今天之后的所有日期
+function disableFutureDate(date) {
+  const now = new Date()
+  now.setHours(23, 59, 59, 999)
+  return date.getTime() > now.getTime()
 }
 // 四项统计：内部「已完成」在展示层即为「已发布」
 const counts = computed(() => {
@@ -773,6 +780,10 @@ async function doCompleteProduction() {
     ElMessage.warning('请选择完成日期')
     return
   }
+  if (completeDialog.date > todayString()) {
+    ElMessage.warning('完成日期不能晚于今天，不能提前完成')
+    return
+  }
   completeDialog.loading = true
   try {
     const completedAt = `${completeDialog.date}T23:59:59`
@@ -920,6 +931,7 @@ onMounted(async () => {
   gap: 12px;
   align-items: flex-start;
   width: 100%;
+  box-sizing: border-box;
   padding: 10px 12px;
   margin-bottom: 16px;
   border: 1px solid var(--adm-border);
@@ -1042,6 +1054,7 @@ onMounted(async () => {
   gap: 14px;
   align-items: flex-start;
   width: 100%;
+  box-sizing: border-box;
   padding: 10px 12px;
   border: 1px solid var(--adm-border);
   border-radius: 10px;

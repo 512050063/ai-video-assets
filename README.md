@@ -85,7 +85,7 @@ python backend/smoke_test.py
 cd frontend && node smoke_test.cjs
 ```
 
-2026-11-27 交付验证：后端 **284/284**、前端 **138/138**、Vite 构建通过。测试可通过 `AVM_TEST_DB_PATH` 指向临时库，避免污染交付数据。
+2026-11-27 交付验证：后端 **285/285**、前端 **145/145**、Vite 构建通过。测试可通过 `AVM_TEST_DB_PATH` 指向临时库，避免污染交付数据。
 
 ## 文档
 

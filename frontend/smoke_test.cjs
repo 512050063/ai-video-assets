@@ -535,6 +535,23 @@ async function main() {
       ok('完成日期框含完成语义与日期输入', /完成/.test(await text(cdlg)) && await cdlg.locator('input').count() >= 1, await text(cdlg))
       const dateVal = await cdlg.locator('input').first().inputValue()
       ok('完成日期默认今天', /^\d{4}-\d{2}-\d{2}$/.test(dateVal), dateVal)
+      ok('确认弹窗无横向滚动条', await cdlg.locator('.el-dialog__body').evaluate(el => el.scrollWidth <= el.clientWidth + 1))
+      // 日期控件：打开面板，今天可点、明天及之后禁用（不能提前完成）
+      await cdlg.locator('input').first().click()
+      await page.waitForTimeout(300)
+      const dateCells = await page.evaluate(() => {
+        const cells = [...document.querySelectorAll('.el-picker-panel__content td')]
+        const todayCell = cells.find(td => td.classList.contains('today'))
+        const future = cells.filter(td => td.classList.contains('next-month') || td.classList.contains('disabled'))
+        return {
+          todayDisabled: todayCell ? todayCell.classList.contains('disabled') : null,
+          futureDisabled: future.length > 0 && future.every(td => td.classList.contains('disabled') || td.classList.contains('next-month')),
+        }
+      })
+      ok('完成日期今天可选', dateCells.todayDisabled === false, 'todayDisabled=' + dateCells.todayDisabled)
+      ok('完成日期未来日期禁用（不能提前完成）', dateCells.futureDisabled === true, JSON.stringify(dateCells))
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(200)
       await page.keyboard.press('Escape')
       await page.waitForTimeout(300)
 
@@ -730,6 +747,57 @@ async function main() {
     ok('切换隐藏筛选时KPI与条数保持不变', kpiBefore === kpiHidden, kpiBefore + ' || ' + kpiHidden)
     await page.locator('.adm-status-bar .adm-tab-chip').first().click()
     await page.waitForTimeout(400)
+
+    // 匹配创作记录弹窗：列表都是待发布，不显示"待发布"状态，作者/创作者用标签，高度不溢出
+    await page.evaluate(() => {
+      const vueApp = document.querySelector('#app')?.__vue_app__
+      const seen = new Set()
+      function visit(inst, d) {
+        if (!inst || d > 20 || (inst.uid != null && seen.has(inst.uid))) return
+        if (inst.uid != null) seen.add(inst.uid)
+        const st = inst.setupState
+        if (st?.matchDialog && typeof st.matchDialog === 'object' && 'options' in st.matchDialog) {
+          st.matchDialog.visible = true
+          st.matchDialog.loading = false
+          st.matchDialog.keyword = ''
+          st.matchDialog.currentId = null
+          st.matchDialog.options = [
+            { id: 9001, title: '__SMOKE__匹配项1', author: 'Lu小器', status: '待发布', owner_name: '创作者甲' },
+            { id: 9002, title: '__SMOKE__匹配项2', author: '小寒', status: '待发布', owner_name: '创作者乙' }
+          ]
+          return true
+        }
+        const ch = inst.children
+        if (Array.isArray(ch)) { for (const c of ch) { if (c.component && visit(c.component, d + 1)) return true; if (c.__vnode && visit(c.__vnode.component, d + 1)) return true } }
+        if (inst.subTree && visitVNode(inst.subTree, d + 1)) return true
+        return false
+      }
+      function visitVNode(vn, d) {
+        if (!vn || d > 20) return false
+        if (vn.component && visit(vn.component, d)) return true
+        const ch = vn.children
+        if (Array.isArray(ch)) { for (const c of ch) { if (c && typeof c === 'object' && visitVNode(c, d + 1)) return true } }
+        return false
+      }
+      visit(vueApp._instance, 0)
+    })
+    await page.waitForTimeout(500)
+    const mdlg = page.locator('.match-dialog:visible')
+    ok('匹配弹窗可打开', await mdlg.count() === 1)
+    if (await mdlg.count()) {
+      const nums = await mdlg.locator('.match-option:not(.is-current) .auto-nums').allInnerTexts()
+      ok('匹配列表不显示待发布状态', nums.every(t => !t.includes('待发布')), nums.join(' | '))
+      ok('匹配列表作者/创作者用标签展示', await mdlg.locator('.match-owner-tag').count() >= 4,
+         'tags=' + await mdlg.locator('.match-owner-tag').count())
+      const mLayout = await mdlg.evaluate(el => {
+        const r = el.getBoundingClientRect()
+        const foot = el.querySelector('.el-dialog__footer')
+        return { overflow: r.bottom > innerHeight + 1, footVisible: foot ? foot.getBoundingClientRect().bottom <= innerHeight + 1 : null }
+      })
+      ok('匹配弹窗高度不溢出且按钮可见', !mLayout.overflow && mLayout.footVisible === true, JSON.stringify(mLayout))
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(300)
+    }
 
     /* ---------- 8. 清理测试数据 ---------- */
     if (testIdeaId) {

@@ -562,6 +562,11 @@ def run():
            p_done.get("completed_at") if isinstance(p_done, dict) else p_done)
         ok("部分更新未清空人物绑定", len(p_done.get("characters", [])) == 1)
         ok("部分更新未清空提示词", len(p_done.get("prompt", [])) == 1)
+        # 完成日期不能晚于今天（不能提前完成），后端兜底校验
+        code, bad_future = req("PUT", "/productions/%s" % prod_id,
+                               {"status": "待发布", "completed_at": "2099-12-31T23:59:59"})
+        ok("拒绝晚于今天的完成日期", code == 400 and "完成日期" in str(bad_future),
+           "code=%s %s" % (code, bad_future))
 
         code, p_pub = req("PUT", "/productions/%s" % prod_id, {"status": "已完成", "published_url": "https://www.douyin.com/video/9988"})
         ok("状态流转到已完成并写 published_at", code == 200 and bool(p_pub.get("published_at")), p_pub.get("published_at"))
