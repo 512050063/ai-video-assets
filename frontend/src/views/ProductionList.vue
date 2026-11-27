@@ -940,8 +940,13 @@ async function doEdit() {
 }
 
 function remove(row) {
-  confirm.title = '删除制作记录'
-  confirm.message = `确定删除「${row.title || '未命名制作'}」吗？删除后无法恢复。`
+  // 删除前提校验放在确认弹窗之前：已关联发布数据的创作直接提示拦截
+  if (row.can_delete === false) {
+    ElMessage.warning(row.delete_blocked_reason || '该创作已进入下一流程，无法删除')
+    return
+  }
+  confirm.title = '隐藏制作记录'
+  confirm.message = `确定隐藏「${row.title || '未命名制作'}」吗？隐藏后将不再显示，数据仍保留。`
   confirm.id = row.id
   confirm.visible = true
 }
@@ -950,7 +955,7 @@ async function doRemove() {
   confirm.loading = true
   try {
     await api.delete(`/productions/${confirm.id}`)
-    ElMessage.success('已删除')
+    ElMessage.success('已隐藏')
     confirm.visible = false
     load()
   } catch (e) {

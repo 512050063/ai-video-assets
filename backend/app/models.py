@@ -321,6 +321,8 @@ class Idea(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # 软删除：删除仅标记隐藏，记录仍保留在库中便于追溯
+    is_deleted = Column(Boolean, default=False, index=True)
 
     owner = relationship("User", foreign_keys=[owner_id])
     creator = relationship("User", foreign_keys=[creator_id])
@@ -383,6 +385,8 @@ class Production(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    # 软删除：删除仅标记隐藏，记录仍保留在库中便于追溯
+    is_deleted = Column(Boolean, default=False, index=True)
 
     idea = relationship("Idea", back_populates="productions")
     category = relationship("Category", back_populates="productions")

@@ -101,10 +101,10 @@ def _to_detail(
         created_at=idea.created_at,
         updated_at=idea.updated_at,
     )
-    # 关联制作：按 idea_id 直接查找来源制作记录
+    # 关联制作：按 idea_id 直接查找来源制作记录（排除已软删除的记录）
     production = (
         db.query(Production)
-        .filter(Production.idea_id == idea.id)
+        .filter(Production.idea_id == idea.id, Production.is_deleted.is_(False))
         .order_by(Production.id.desc())
         .first()
     )
@@ -113,6 +113,15 @@ def _to_detail(
         out.production_title = production.title
         out.production_status = production.status
         out.completed_at = production.completed_at
+    # 删除前置校验：已进入制作/发布流程的创意不能删除（前两个流程页面一致拦截）
+    if production:
+        out.can_delete = False
+        out.delete_blocked_reason = (
+            "该创意已进入视频创作流程，无法删除（请先到「视频创作」处理对应记录）"
+        )
+    elif (idea.status or "") in ("制作中", "待发布", "已完成"):
+        out.can_delete = False
+        out.delete_blocked_reason = "该创意已进入制作或发布流程，无法删除"
     out.owner_id = idea.owner_id
     out.owner_name = _owner_name(idea)
     out.is_owner = idea.owner_id == user.id
@@ -195,7 +204,9 @@ def _apply_in(db: Session, idea: Idea, data: IdeaIn):
 
     # 同一抖音视频不重复收集
     if idea.video_id:
-        dup_q = db.query(Idea).filter(Idea.video_id == idea.video_id)
+        dup_q = db.query(Idea).filter(
+            Idea.video_id == idea.video_id, Idea.is_deleted.is_(False)
+        )
         if idea.id:
             dup_q = dup_q.filter(Idea.id != idea.id)
         dup = dup_q.first()
@@ -217,6 +228,8 @@ def list_ideas(
     # 惰性自动流转：排期时间到的「已排期」创意自动进「制作中」
     _promote_due_ideas(db)
     q = db.query(Idea).options(joinedload(Idea.owner))
+    # 软删除：隐藏记录不出现在任何列表
+    q = q.filter(Idea.is_deleted.is_(False))
     if scope == "planned":
         # 我的计划：创作人是自己（creator_id），与提交人（owner_id）区分
         q = q.filter(Idea.creator_id == user.id)
@@ -268,7 +281,7 @@ def _mark_duplicate(result: dict, db: Session, exclude_id: int | None = None) ->
     result["duplicate_title"] = ""
     if not video_id:
         return result
-    q = db.query(Idea).filter(Idea.video_id == video_id)
+    q = db.query(Idea).filter(Idea.video_id == video_id, Idea.is_deleted.is_(False))
     if exclude_id:
         q = q.filter(Idea.id != exclude_id)
     dup = q.first()
@@ -618,7 +631,6 @@ def update_idea(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    require_permission(user, "ideas.edit", db)
     _apply_in(db, idea, data)
     db.commit()
     db.refresh(idea)
@@ -628,20 +640,29 @@ def update_idea(
 # 全流程 6 态：未使用 / 已排期 / 制作中 / 待发布 / 废弃 / 已完成（「已完成」展示为已发布）
 # 「备选库」改为独立备选标记 is_backup，不再是流程状态。
 # 创意灵感页状态标签只在「未使用 / 已排期」间切换；创作计划弹窗保存后进入「已排期」；
-# 排期时间到（planned_at <= now）由惰性任务 _promote_due_ideas 自动推进到「制作中」。
+# 排期日期到（planned_at 的日期 <= 今天）由惰性任务 _promote_due_ideas 自动推进到「制作中」。
+# 前端只选日期，后端存成当天 23:59:59，因此必须按「日期」而非精确时刻判断，
+# 否则用户排期到今天时，当天全天都会停留在「已排期」，与预期不符。
 IDEA_STATUSES = ("未使用", "已排期", "制作中", "待发布", "废弃", "已完成")
 # 创意灵感页状态标签可直接切换的状态（制作及以后由到期任务/视频创作页控制）
 IDEA_STATUS_DIRECT = ("未使用", "已排期")
 
 
 def _promote_due_ideas(db: Session) -> int:
-    """惰性自动流转：排期时间已到的「已排期」创意 → 「制作中」并生成制作记录。
+    """惰性自动流转：排期日期已到的「已排期」创意 → 「制作中」并生成制作记录。
 
+    前端排期只选日期（存为当天 23:59:59），因此按日期比较：排期日期 <= 今天即可流转。
     在列表/详情查询时调用，避免依赖后台定时任务；返回本次推进的条数。
     """
+    today_end = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
     due = (
         db.query(Idea)
-        .filter(Idea.status == "已排期", Idea.planned_at.isnot(None), Idea.planned_at <= datetime.now())
+        .filter(
+            Idea.status == "已排期",
+            Idea.is_deleted.is_(False),
+            Idea.planned_at.isnot(None),
+            Idea.planned_at <= today_end,
+        )
         .all()
     )
     if not due:
@@ -698,7 +719,6 @@ def update_idea_status(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    require_permission(user, "ideas.edit", db)
     status = (data.status or "").strip()
     if status not in IDEA_STATUS_DIRECT:
         raise HTTPException(
@@ -733,7 +753,6 @@ def arrange_idea(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    require_permission(user, "ideas.edit", db)
 
     provided = data.model_fields_set
     if "status" in provided and data.status is not None:
@@ -779,7 +798,6 @@ def toggle_backup(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    require_permission(user, "ideas.edit", db)
     requested = None
     if isinstance(data, dict) and "is_backup" in data:
         requested = bool(data["is_backup"])
@@ -800,7 +818,6 @@ def cancel_plan(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    require_permission(user, "ideas.edit", db)
     if idea.status not in ("已排期", "制作中"):
         raise HTTPException(status_code=400, detail="仅「已排期 / 制作中」的创意可取消排期")
 
@@ -830,9 +847,25 @@ def delete_idea(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    require_permission(user, "ideas.delete", db)
-    drop_tags(db, idea.tags)
-    db.delete(idea)
+    if idea.is_deleted:
+        raise HTTPException(status_code=400, detail="该创意已隐藏，无需重复操作")
+    # 创意灵感对所有用户放开编辑/删除，不校验按钮权限。
+    # 但删除有硬前提：已进入视频创作/发布流程的记录不可删除。
+    production = (
+        db.query(Production)
+        .filter(Production.idea_id == idea.id, Production.is_deleted.is_(False))
+        .first()
+    )
+    if production:
+        raise HTTPException(
+            status_code=400,
+            detail="该创意已进入视频创作流程，无法删除（请先到「视频创作」处理对应记录）",
+        )
+    if (idea.status or "") in ("制作中", "待发布", "已完成"):
+        raise HTTPException(status_code=400, detail="该创意已进入制作或发布流程，无法删除")
+    # 软删除：仅标记隐藏，保留记录与标签便于追溯
+    idea.is_deleted = True
+    idea.updated_at = datetime.now()
     db.commit()
     return {"ok": True}
 

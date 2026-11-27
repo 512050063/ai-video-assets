@@ -38,6 +38,7 @@ from ..workflow import (
     STATUS_MAKING,
     STATUS_PENDING,
     STATUS_PUBLISHED,
+    has_binding,
     transition,
 )
 
@@ -242,7 +243,14 @@ def _resolve_author(production: Production) -> str:
     return ""
 
 
-def _to_item(production: Production, user: User) -> ProductionListItem:
+def _apply_delete_guard(item, production: Production, db: Session) -> None:
+    """删除前置校验：已关联发布数据（含状态锁定）的创作不可删除。"""
+    if (production.status or "") == STATUS_PUBLISHED or has_binding(db, production):
+        item.can_delete = False
+        item.delete_blocked_reason = "该创作已关联发布数据（已发布），无法删除（请先取消发布数据关联）"
+
+
+def _to_item(production: Production, user: User, db: Session) -> ProductionListItem:
     item = ProductionListItem(**_base_fields(production))
     item.author = _resolve_author(production)
     item.category_name = production.category.name if production.category else None
@@ -255,10 +263,11 @@ def _to_item(production: Production, user: User) -> ProductionListItem:
     item.owner_id = production.owner_id
     item.owner_name = _owner_name(production)
     item.is_owner = production.owner_id == user.id
+    _apply_delete_guard(item, production, db)
     return item
 
 
-def _to_detail(production: Production, user: User) -> ProductionDetailOut:
+def _to_detail(production: Production, user: User, db: Session) -> ProductionDetailOut:
     out = ProductionDetailOut(**_base_fields(production))
     out.author = _resolve_author(production)
     out.category_name = production.category.name if production.category else None
@@ -273,6 +282,7 @@ def _to_detail(production: Production, user: User) -> ProductionDetailOut:
     out.owner_id = production.owner_id
     out.owner_name = _owner_name(production)
     out.is_owner = production.owner_id == user.id
+    _apply_delete_guard(out, production, db)
     return out
 
 
@@ -297,6 +307,8 @@ def list_productions(
         selectinload(Production.links).joinedload(ProductionCharacter.character).joinedload(Character.images),
         selectinload(Production.assets),
     )
+    # 软删除：隐藏记录不出现在列表
+    q = q.filter(Production.is_deleted.is_(False))
     q = scope_filter(q, Production, user, scope)
     if keyword:
         like = f"%{keyword}%"
@@ -323,7 +335,7 @@ def list_productions(
         .limit(page_size)
         .all()
     )
-    return {"items": [_to_item(p, user) for p in rows], "total": total}
+    return {"items": [_to_item(p, user, db) for p in rows], "total": total}
 
 
 @router.post("", response_model=ProductionDetailOut)
@@ -367,7 +379,7 @@ def create_production(
     _sync_assets(db, production, data.assets)
     db.commit()
     db.refresh(production)
-    return _to_detail(production, user)
+    return _to_detail(production, user, db)
 
 
 @router.get("/{production_id}", response_model=ProductionDetailOut)
@@ -379,7 +391,7 @@ def get_production(
     production = db.query(Production).get(production_id)
     if not production:
         raise HTTPException(status_code=404, detail="制作记录不存在")
-    return _to_detail(production, user)
+    return _to_detail(production, user, db)
 
 
 @router.put("/{production_id}", response_model=ProductionDetailOut)
@@ -412,7 +424,7 @@ def update_production(
         _sync_assets(db, production, data.assets)
     db.commit()
     db.refresh(production)
-    return _to_detail(production, user)
+    return _to_detail(production, user, db)
 
 
 @router.delete("/{production_id}")
@@ -426,7 +438,17 @@ def delete_production(
         raise HTTPException(status_code=404, detail="制作记录不存在")
     require_permission(user, "productions.delete", db)
     ensure_owner(production, user, "删除")
-    drop_tags(db, production.tags)
-    db.delete(production)
+    if production.is_deleted:
+        raise HTTPException(status_code=400, detail="该创作已隐藏，无需重复操作")
+    # 删除硬前提：已关联发布数据（已进入「已发布」）不可删除，
+    # 创意灵感 / 视频创作两个页面一致拦截。
+    if (production.status or "") == STATUS_PUBLISHED or has_binding(db, production):
+        raise HTTPException(
+            status_code=400,
+            detail="该创作已关联发布数据（已发布），无法删除（请先取消发布数据关联）",
+        )
+    # 软删除：仅标记隐藏，保留记录与关联数据便于追溯
+    production.is_deleted = True
+    production.updated_at = datetime.now()
     db.commit()
     return {"ok": True}

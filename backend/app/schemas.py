@@ -580,6 +580,9 @@ class IdeaDetailOut(IdeaOut):
     can_assign: bool = False
     # 评论：系统内评论条数（详情在评论弹窗中按需拉取）
     comment_total: int = 0
+    # 删除前置校验：已进入下一流程时不可删除，前端在确认弹窗前据此提示
+    can_delete: bool = True
+    delete_blocked_reason: str = ""
     # 视频数据：喜欢 / 评论 / 收藏 / 转发
     like_count: int = 0
     comment_count: int = 0
@@ -712,6 +715,9 @@ class ProductionListItem(ProductionOut):
     owner_id: Optional[int] = None
     owner_name: Optional[str] = None
     is_owner: bool = False
+    # 删除前置校验：已关联发布数据时不可删除，前端在确认弹窗前据此提示
+    can_delete: bool = True
+    delete_blocked_reason: str = ""
 
 
 class ProductionListOut(BaseModel):

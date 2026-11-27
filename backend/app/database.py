@@ -153,6 +153,8 @@ def run_migrations():
         _add_column(conn, "ideas", "creator_id", "INTEGER")
         # 创意：备选标记（与流程状态独立）
         _add_column(conn, "ideas", "is_backup", "BOOLEAN DEFAULT 0")
+        # 软删除：删除仅隐藏，不物理删除记录（创意）
+        _add_column(conn, "ideas", "is_deleted", "BOOLEAN DEFAULT 0")
         # 资产库：人物 / 场景 / 服装共用 characters 表，用 asset_type 区分
         _add_column(conn, "characters", "tags", "JSON")
         _add_column(conn, "characters", "updated_at", "DATETIME")
@@ -174,6 +176,8 @@ def run_migrations():
         _add_column(conn, "productions", "publish_platform", "VARCHAR(50) DEFAULT ''")
         # 视频制作流程：当前绑定的发布作品 ID，作为状态锁定与解绑回退的唯一标识
         _add_column(conn, "productions", "published_video_id", "VARCHAR(80) DEFAULT ''")
+        # 软删除：删除仅隐藏，不物理删除记录（视频创作）
+        _add_column(conn, "productions", "is_deleted", "BOOLEAN DEFAULT 0")
         # 数据中心记录状态：正常 / 隐藏 / 删除（默认正常，历史数据不受影响）
         _add_column(conn, "productions", "data_status", "VARCHAR(20) DEFAULT '正常'")
         try:

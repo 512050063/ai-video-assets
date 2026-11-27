@@ -240,8 +240,8 @@
           <el-table-column label="操作" min-width="120" fixed="right" align="center">
             <template #default="{ row }">
               <div class="adm-cell-actions">
-                <el-button v-if="perm.can('ideas.edit')" type="text" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-if="perm.can('ideas.delete')" type="text" size="small" class="danger-text" @click="remove(row)">删除</el-button>
+                <el-button type="text" size="small" @click="openEdit(row)">编辑</el-button>
+                <el-button type="text" size="small" class="danger-text" @click="remove(row)">删除</el-button>
               </div>
             </template>
           </el-table-column>
@@ -992,8 +992,13 @@ async function save() {
 }
 
 function remove(row) {
-  confirm.title = '删除创意'
-  confirm.message = `确定删除「${row.title || '未命名创意'}」吗？删除后无法恢复。`
+  // 删除前提校验放在确认弹窗之前：已进入制作/发布流程的创意直接提示拦截
+  if (row.can_delete === false) {
+    ElMessage.warning(row.delete_blocked_reason || '该创意已进入下一流程，无法删除')
+    return
+  }
+  confirm.title = '隐藏创意'
+  confirm.message = `确定隐藏「${row.title || '未命名创意'}」吗？隐藏后将不再显示，数据仍保留。`
   confirm.id = row.id
   confirm.visible = true
 }
@@ -1002,7 +1007,7 @@ async function doRemove() {
   confirm.loading = true
   try {
     await api.delete(`/ideas/${confirm.id}`)
-    ElMessage.success('已删除')
+    ElMessage.success('已隐藏')
     confirm.visible = false
     load()
   } catch (e) {
