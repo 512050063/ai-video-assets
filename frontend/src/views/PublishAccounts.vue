@@ -1002,29 +1002,29 @@ onUnmounted(() => {
 .copy-id-btn { padding: 2px; height: auto; font-size: 12px; color: var(--adm-text-secondary); }
 .copy-id-btn:hover { color: var(--el-color-primary); }
 .login-status-tag { cursor: pointer; min-width: 44px; }
-/* 账号数据：数值右上角显示相对上次采集的增减（红涨绿跌） */
-.delta-value { position: relative; display: inline-block; padding-right: 15px; }
+/* 账号数据：数值后跟轻量增减标签（红涨绿跌），与数字基线对齐，避免悬浮角标的杂乱感 */
+.delta-value { display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .delta-value .adm-cell-num { font-weight: 600; }
 .delta-badge {
-  position: absolute;
-  top: -5px;
-  right: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  border-radius: 7px;
-  color: #fff;
-  font-size: 9px;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 4px;
+  font-size: 10px;
   line-height: 1;
   font-weight: 600;
   white-space: nowrap;
+  letter-spacing: .2px;
 }
-.delta-badge.is-up { background: #e05252; }
-.delta-badge.is-down { background: #1fa463; }
-.delta-badge.is-flat { background: #a8b0bb; }
+/* 上涨：淡红底 + 红字，醒目但不刺眼 */
+.delta-badge.is-up { background: #fdeaea; color: #d64545; }
+/* 下跌：淡绿底 + 绿字 */
+.delta-badge.is-down { background: #e7f7ee; color: #129462; }
+/* 无变化：仅保留极淡占位，不再用深灰实心圆抢视觉 */
+.delta-badge.is-flat { background: transparent; color: #c0c6cf; font-weight: 400; }
 /* 运营管理：更新节奏 / 责任人上下两行标签 */
 .rhythm-owner-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 .management-tag-wrap { display: inline-flex; cursor: pointer; width: 84px; }
