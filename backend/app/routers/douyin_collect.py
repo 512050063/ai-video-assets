@@ -148,6 +148,7 @@ def sync_one_account(
     before = _capture_account_values(account)
     videos_created = 0
     videos_updated = 0
+    videos_fetched = 0
     video_note = ""
     try:
         _sync_account(db, account)
@@ -155,16 +156,17 @@ def sync_one_account(
         cfg = get_auto_update_config(db)
         if cfg["sync_publish_data"]:
             try:
-                videos_created, videos_updated, fetched = sync_account_publish_videos(
+                videos_created, videos_updated, videos_fetched = sync_account_publish_videos(
                     db, account, cfg["video_limit"]
                 )
-                video_note = f"同步发布数据 {fetched} 条（新增 {videos_created} / 更新 {videos_updated}）"
+                video_note = f"同步发布数据 {videos_fetched} 条（新增 {videos_created} / 更新 {videos_updated}）"
             except CollectError as exc:
                 video_note = f"发布数据同步失败：{exc.message}"
                 if getattr(exc, "need_login", False):
                     _mark_login_state(account, False)
         snapshot = create_account_snapshot(
-            account, source="manual", note="手动点击更新；" + video_note, previous=before
+            account, source="manual", note="手动点击更新；" + video_note,
+            fetched_video_count=videos_fetched, previous=before
         )
         db.add(snapshot)
         db.commit()
@@ -225,6 +227,7 @@ def sync_all_accounts(
             before = _capture_account_values(account)
             _sync_account(db, account)
             note = "批量更新账号资料"
+            fetched_video_count = 0
             if cfg["sync_publish_data"]:
                 try:
                     created, updated, fetched = sync_account_publish_videos(
@@ -232,12 +235,16 @@ def sync_all_accounts(
                     )
                     videos_created_total += created
                     videos_updated_total += updated
+                    fetched_video_count = fetched
                     note += f"；同步发布数据 {fetched} 条"
                 except CollectError as exc:
                     note += f"；发布数据同步失败：{exc.message}"
                     if getattr(exc, "need_login", False):
                         _mark_login_state(account, False)
-            db.add(create_account_snapshot(account, source="manual", note=note, previous=before))
+            db.add(create_account_snapshot(
+                account, source="manual", note=note,
+                fetched_video_count=fetched_video_count, previous=before
+            ))
             succeeded += 1
         except CollectError as exc:
             _mark_login_state(account, False)
