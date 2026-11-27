@@ -366,10 +366,13 @@ def fetch_videos_by_account(
     _mark_login_state(account, True)
     account.last_synced_at = datetime.now()
     db.commit()
+    videos = _mark_imported_flags(db, info.get("videos") or [])
+    info = dict(info)
+    info["videos"] = videos
     return DouyinVideosFetchOut(
         ok=True,
         channel=info.get("channel", "browser"),
-        message=f"获取到 {len(info.get('videos') or [])} 条作品",
+        message=f"获取到 {len(videos)} 条作品",
         data=info,
     )
 

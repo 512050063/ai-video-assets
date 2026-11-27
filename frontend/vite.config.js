@@ -3,6 +3,10 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
+  // 每次构建写入时间戳，页面上可见，便于确认浏览器加载的是不是最新前端
+  define: {
+    __APP_BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   server: {
     port: 5173,
     proxy: {

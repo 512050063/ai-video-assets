@@ -37,4 +37,9 @@ def spa_fallback(full_path: str):
         if candidate.is_file() and DIST_DIR.resolve() in candidate.parents:
             return FileResponse(candidate)
 
-    return FileResponse(DIST_DIR / "index.html")
+    # 入口页必须每次重新拉取：否则浏览器可能用缓存里的旧 index.html，
+    # 继续加载已删除的旧 JS chunk，导致新功能（如自动勾选）看不到。
+    return FileResponse(
+        DIST_DIR / "index.html",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, max-age=0"},
+    )

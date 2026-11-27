@@ -399,6 +399,7 @@
         <el-checkbox v-model="autoCheckImported">
           已导入作品自动勾选（仅勾选的才写入/更新，取消勾选则不更新）
         </el-checkbox>
+        <span v-if="pageBuildTime" class="auto-build-time">页面版本 {{ pageBuildTime }}</span>
       </div>
       <div class="auto-tip">
         账号默认跟随当前账号标签，条数默认「全部」。仅能采集主页公开展示的作品；抖音「隐藏 / 仅自己可见」作品不在公开列表，无法自动获取，请在表格右上角「手动导入」中录入。
@@ -627,6 +628,11 @@ const manual = reactive({
 
 // 已勾选的采集作品
 const selectedAutoVideos = computed(() => auto.videos.filter((_, i) => auto.checked[i]))
+
+// 页面构建时间：用于确认浏览器加载的是不是最新前端（旧缓存看不到自动勾选配置行）
+const pageBuildTime = typeof __APP_BUILD_TIME__ === 'string'
+  ? __APP_BUILD_TIME__.replace('T', ' ').slice(0, 16)
+  : ''
 
 // 已导入作品自动勾选：配置保存在「系统设置 → 抖音解析」，默认开启
 const autoCheckImported = computed({
@@ -1400,7 +1406,12 @@ onMounted(async () => {
   background: var(--adm-blue-bg, #eef4ff);
   font-size: 12.5px;
   color: var(--adm-text-regular);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
+.auto-build-time { font-size: 11.5px; color: var(--adm-text-placeholder); white-space: nowrap; }
 .auto-tip { font-size: 12px; color: var(--adm-text-placeholder); margin-top: -8px; }
 .auto-error {
   padding: 12px;
