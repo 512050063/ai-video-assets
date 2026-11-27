@@ -7,7 +7,6 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from ..auth import (
-    ensure_owner,
     get_current_user,
     has_permission,
     require_create,
@@ -619,7 +618,6 @@ def update_idea(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    ensure_owner(idea, user, "编辑")
     require_permission(user, "ideas.edit", db)
     _apply_in(db, idea, data)
     db.commit()
@@ -700,7 +698,6 @@ def update_idea_status(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    ensure_owner(idea, user, "修改状态")
     require_permission(user, "ideas.edit", db)
     status = (data.status or "").strip()
     if status not in IDEA_STATUS_DIRECT:
@@ -728,7 +725,7 @@ def arrange_idea(
 ):
     """创作计划弹窗：设置紧急程度 / 创作人 / 制作时间，保存后状态进入「已排期」。
 
-    - 仅归属人或超管可操作。
+    - 拥有「编辑创意」按钮权限即可操作，不限定归属人。
     - 字段缺省保持原值；显式传 null 清空对应字段。
     - 创作人为独立字段 creator_id（负责制作视频的人）。
     - 保存后状态 = 已排期；排期时间到由 _promote_due_ideas 自动推进到「制作中」并生成制作记录。
@@ -736,7 +733,6 @@ def arrange_idea(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    ensure_owner(idea, user, "修改创作安排")
     require_permission(user, "ideas.edit", db)
 
     provided = data.model_fields_set
@@ -779,11 +775,10 @@ def toggle_backup(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """切换备选标记：纯标记，不改变流程状态。归属人或管理员可操作。"""
+    """切换备选标记：纯标记，不改变流程状态。拥有编辑权限即可操作。"""
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    ensure_owner(idea, user, "修改备选标记")
     require_permission(user, "ideas.edit", db)
     requested = None
     if isinstance(data, dict) and "is_backup" in data:
@@ -805,7 +800,6 @@ def cancel_plan(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    ensure_owner(idea, user, "取消排期")
     require_permission(user, "ideas.edit", db)
     if idea.status not in ("已排期", "制作中"):
         raise HTTPException(status_code=400, detail="仅「已排期 / 制作中」的创意可取消排期")
@@ -836,7 +830,6 @@ def delete_idea(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    ensure_owner(idea, user, "删除")
     require_permission(user, "ideas.delete", db)
     drop_tags(db, idea.tags)
     db.delete(idea)
@@ -857,7 +850,6 @@ def schedule_idea(
     idea = db.query(Idea).get(idea_id)
     if not idea:
         raise HTTPException(status_code=404, detail="创意不存在")
-    ensure_owner(idea, user, "排期")
     if idea.status not in ("未使用", "已排期"):
         raise HTTPException(status_code=400, detail="仅未使用 / 已排期的创意可设置排期")
 

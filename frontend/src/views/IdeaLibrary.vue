@@ -132,7 +132,7 @@
                 class="status-tag-btn"
                 :class="{ 'is-backup': row.is_backup }"
                 :disabled="!canEditStatus(row)"
-                :title="canEditStatus(row) ? (row.is_backup ? '点击取消备选标记' : '点击标记为备选') : '仅归属人或管理员可标记'"
+                :title="canEditStatus(row) ? (row.is_backup ? '点击取消备选标记' : '点击标记为备选') : '需要有编辑创意权限'"
                 @click="toggleBackup(row)"
               >
                 <el-icon v-if="row.is_backup" :size="13" class="status-star-on"><Star /></el-icon>
@@ -160,7 +160,7 @@
                 type="button"
                 class="plan-icon-btn"
                 :disabled="!canEditStatus(row)"
-                :title="canEditStatus(row) ? '设置创作计划（进入已排期）' : '仅归属人或管理员可设置'"
+                :title="canEditStatus(row) ? '设置创作计划（进入已排期）' : '需要有编辑创意权限'"
                 @click="openPlan(row)"
               >
                 <el-icon :size="18"><Calendar /></el-icon>
@@ -240,8 +240,8 @@
           <el-table-column label="操作" min-width="120" fixed="right" align="center">
             <template #default="{ row }">
               <div class="adm-cell-actions">
-                <el-button v-if="perm.can('ideas.edit') && (row.is_owner || auth.isAdmin)" type="text" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-if="perm.can('ideas.delete') && (row.is_owner || auth.isAdmin)" type="text" size="small" class="danger-text" @click="remove(row)">删除</el-button>
+                <el-button v-if="perm.can('ideas.edit')" type="text" size="small" @click="openEdit(row)">编辑</el-button>
+                <el-button v-if="perm.can('ideas.delete')" type="text" size="small" class="danger-text" @click="remove(row)">删除</el-button>
               </div>
             </template>
           </el-table-column>
@@ -748,9 +748,9 @@ async function toggleVote(row) {
   }
 }
 
-// 创意灵感仅归属人/管理员可改
+// 创意灵感：拥有「编辑创意」按钮权限即可操作，不再限定归属人
 function canEditStatus(row) {
-  return perm.can('ideas.edit') && (row.is_owner || auth.isAdmin)
+  return perm.can('ideas.edit')
 }
 
 // 点击状态标签切换备选标记：所有状态均可点，纯标记切换，不改流程状态

@@ -171,8 +171,8 @@
           <el-table-column label="操作" min-width="120" fixed="right" align="center">
             <template #default="{ row }">
               <div class="adm-cell-actions">
-                <el-button v-if="perm.can('productions.edit') && (row.is_owner || auth.isAdmin)" type="text" size="small" @click="openEdit(row)">编辑</el-button>
-                <el-button v-if="perm.can('productions.delete') && (row.is_owner || auth.isAdmin)" type="text" size="small" class="danger-text" @click="remove(row)">删除</el-button>
+                <el-button v-if="perm.can('productions.edit')" type="text" size="small" @click="openEdit(row)">编辑</el-button>
+                <el-button v-if="perm.can('productions.delete')" type="text" size="small" class="danger-text" @click="remove(row)">删除</el-button>
               </div>
             </template>
           </el-table-column>
@@ -747,13 +747,13 @@ function removeEditCharacter(id) {
   edit.form.characterIds = edit.form.characterIds.filter((x) => x !== id)
 }
 
-// 制作中/待发布/废弃状态可点击流转；已发布锁定只读
+// 制作中/待发布/废弃状态可点击流转；拥有「编辑制作」权限即可，不再限定归属人
 function canChangeStatus(row) {
-  return perm.can('productions.edit') && (row.is_owner || auth.isAdmin)
+  return perm.can('productions.edit')
 }
 
 function statusClickTitle(row) {
-  if (!canChangeStatus(row)) return '仅归属人或管理员可改'
+  if (!canChangeStatus(row)) return '需要有编辑制作权限'
   if (row.status === '制作中') return '点击确认完成并进入待发布'
   if (row.status === '待发布') return '点击选择返工或废弃'
   if (row.status === '废弃') return '点击确认还原为待发布'
