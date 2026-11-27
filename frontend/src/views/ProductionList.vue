@@ -343,6 +343,15 @@
             </el-form-item>
             <el-form-item label="创作平台">
               <el-select v-model="edit.form.platform" placeholder="选择平台" clearable filterable style="width: 100%">
+                <template v-if="edit.form.platform" #prefix>
+                  <OptionBadge
+                    :name="edit.form.platform"
+                    :color="settings.option('platform', edit.form.platform).color"
+                    :image="settings.option('platform', edit.form.platform).image"
+                    display="icon"
+                    :size="16"
+                  />
+                </template>
                 <el-option v-for="p in settings.platformOptions" :key="p.name" :label="p.name" :value="p.name">
                   <OptionBadge :name="p.name" :color="p.color" :image="p.image" :display="p.display" />
                 </el-option>
@@ -428,9 +437,37 @@
       class="complete-dialog"
     >
       <div class="complete-body">
-        <div class="complete-hint">
-          <el-icon :size="16"><CircleCheckFilled /></el-icon>
-          <span>完成后状态将更新为「待发布」，并记录制作完成日期。</span>
+        <div class="complete-ref-video">
+          <img
+            v-if="completeDialog.row?.cover"
+            :src="completeDialog.row.cover"
+            class="complete-ref-cover"
+            alt="参考视频封面"
+          />
+          <img v-else src="/placeholder.svg" class="complete-ref-cover is-empty" alt="暂无封面" />
+          <div class="complete-ref-info">
+            <div class="complete-ref-title">{{ completeDialog.row?.title || '未命名视频' }}</div>
+            <div class="complete-ref-tags">
+              <template v-if="completeDialog.row?.tags && completeDialog.row.tags.length">
+                <span v-for="t in completeDialog.row.tags" :key="t" class="adm-tag-chip">#{{ t }}</span>
+              </template>
+              <span v-else class="adm-cell-empty">—</span>
+            </div>
+            <div class="complete-ref-readonly">
+              <OptionBadge
+                v-if="completeDialog.row?.category_name"
+                :name="completeDialog.row.category_name"
+                :color="settings.option('category', completeDialog.row.category_name).color"
+                :image="settings.option('category', completeDialog.row.category_name).image"
+                :display="settings.option('category', completeDialog.row.category_name).display"
+              />
+              <span v-else class="adm-cell-empty">—</span>
+              <el-tag size="small" effect="plain">{{ completeDialog.row?.owner_name || '未指定' }}</el-tag>
+              <el-tag :type="productionStatusType(completeDialog.row?.status)" size="small" effect="light">
+                {{ productionStatusLabel(completeDialog.row?.status) }}
+              </el-tag>
+            </div>
+          </div>
         </div>
         <div class="complete-field">
           <label>完成日期</label>
@@ -876,21 +913,48 @@ onMounted(async () => {
   white-space: pre-line;
 }
 
-/* 制作中确认完成弹窗：完成日期选择 */
+/* 制作中确认完成弹窗：参考视频卡片（与编辑弹窗参考视频一致）+ 完成日期选择 */
 .complete-body { padding: 4px 0; }
-.complete-hint {
+.complete-ref-video {
   display: flex;
+  gap: 12px;
   align-items: flex-start;
-  gap: 8px;
+  width: 100%;
   padding: 10px 12px;
   margin-bottom: 16px;
-  border-radius: 8px;
-  background: var(--adm-blue-bg, #eef4ff);
-  color: var(--adm-text-regular);
-  font-size: 13px;
-  line-height: 1.5;
+  border: 1px solid var(--adm-border);
+  border-radius: 10px;
+  background: var(--adm-panel-soft, #f8fafc);
 }
-.complete-hint .el-icon { color: var(--el-color-success, #3da377); flex-shrink: 0; margin-top: 1px; }
+.complete-ref-cover {
+  width: 72px;
+  height: 72px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--adm-border);
+  background: var(--adm-panel);
+}
+.complete-ref-cover.is-empty { opacity: 0.6; }
+.complete-ref-info {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  height: 72px;
+  min-width: 0;
+  flex: 1;
+}
+.complete-ref-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--adm-text-primary);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.complete-ref-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.complete-ref-readonly { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .complete-field label {
   display: block;
   margin-bottom: 6px;

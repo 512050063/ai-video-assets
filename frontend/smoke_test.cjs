@@ -527,6 +527,11 @@ async function main() {
       await page.waitForTimeout(400)
       const cdlg = page.locator('.complete-dialog:visible')
       ok('信息完整后点击状态弹完成日期框', await cdlg.count() === 1)
+      ok('确认弹窗展示参考视频卡片（封面/标题/标签区/只读项）',
+         await cdlg.locator('.complete-ref-video .complete-ref-cover').count() === 1
+         && await cdlg.locator('.complete-ref-video .complete-ref-title').count() === 1
+         && await cdlg.locator('.complete-ref-video .complete-ref-tags').count() === 1
+         && await cdlg.locator('.complete-ref-video .el-tag').count() >= 2)
       ok('完成日期框含完成语义与日期输入', /完成/.test(await text(cdlg)) && await cdlg.locator('input').count() >= 1, await text(cdlg))
       const dateVal = await cdlg.locator('input').first().inputValue()
       ok('完成日期默认今天', /^\d{4}-\d{2}-\d{2}$/.test(dateVal), dateVal)
@@ -551,6 +556,11 @@ async function main() {
       ok('编辑弹窗人物模型为图片卡片（无下拉）',
          await dlg.locator('.model-selected-item .model-selected-cover').count() >= 1
          && await dlg.locator('.el-form-item').filter({ hasText: '人物模型' }).locator('.el-select').count() === 0)
+      // 创作平台选中后文本框内前缀显示平台图标（OptionBadge）
+      const platItem = dlg.locator('.el-form-item').filter({ hasText: '创作平台' })
+      ok('创作平台选中值前缀显示图标',
+         await platItem.locator('.el-select__prefix .option-badge').count() === 1,
+         'prefix badge=' + await platItem.locator('.el-select__prefix .option-badge').count())
       await dlg.locator('.model-add').click()
       await page.waitForTimeout(350)
       const picker = page.locator('.model-picker-dialog:visible')
