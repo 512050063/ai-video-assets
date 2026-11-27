@@ -218,7 +218,11 @@ def list_ideas(
     # 惰性自动流转：排期时间到的「已排期」创意自动进「制作中」
     _promote_due_ideas(db)
     q = db.query(Idea).options(joinedload(Idea.owner))
-    q = scope_filter(q, Idea, user, scope)
+    if scope == "planned":
+        # 我的计划：创作人是自己（creator_id），与提交人（owner_id）区分
+        q = q.filter(Idea.creator_id == user.id)
+    else:
+        q = scope_filter(q, Idea, user, scope)
     if keyword:
         like = f"%{keyword}%"
         q = q.filter(

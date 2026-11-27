@@ -437,6 +437,22 @@ def run():
                "idea=%s owner=%s" % (mprod.get("idea_id"), mprod.get("owner_id")))
             ok("开始时间取排期时间 planned_at", mprod.get("produced_at") is not None
                and "T09:00:00" in str(mprod.get("produced_at")), mprod.get("produced_at"))
+        # 创意列表范围筛选：my-plan 按创作人 creator_id 过滤（与提交人 owner_id 区分）
+        code, planned_idea = req("POST", "/ideas", {
+            "title": PREFIX + "我的计划创意", "tags": [], "author": PREFIX + "作者",
+            "creator_id": admin_id, "priority": 2})
+        planned_id = planned_idea.get("id") if isinstance(planned_idea, dict) else None
+        if planned_id:
+            CREATED["ideas"].append(planned_id)
+            code, plan_scope = req("GET", "/ideas?scope=planned")
+            ok("我的计划筛选仅返回创作人是自己的创意", code == 200
+               and any(x.get("id") == planned_id for x in plan_scope)
+               and all(x.get("creator_id") == admin_id for x in plan_scope),
+               "count=%s" % (len(plan_scope) if isinstance(plan_scope, list) else plan_scope))
+            code, mine_scope = req("GET", "/ideas?scope=mine")
+            ok("我的创意筛选按提交人 owner_id 返回", code == 200
+               and any(x.get("id") == planned_id for x in mine_scope),
+               "count=%s" % (len(mine_scope) if isinstance(mine_scope, list) else mine_scope))
         # 视频创作页：制作中 → 待发布 →（还原）制作中 → 待发布
         sc, wait1 = req("PUT", "/productions/%s" % main_prod_id, {"status": "待发布"})
         ok("视频创作确认完成进入待发布", sc == 200 and wait1.get("status") == "待发布",

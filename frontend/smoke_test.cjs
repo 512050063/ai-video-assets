@@ -147,13 +147,13 @@ async function main() {
        `shown=${shownStars} marked=${starAudit.marked} total=${starAudit.total}`)
     ok('所有状态标签均可用（不限制未使用）', await page.locator('.status-tag-btn:disabled').count() === 0,
        'disabled=' + await page.locator('.status-tag-btn:disabled').count())
-    // 待发布 / 已完成：创作计划只显示制作人 + 完成时间，无紧急程度
+    // 待发布 / 已完成：创作计划显示紧急程度 + 制作人 + 完成时间（priority 数据保留）
     const doneCells = await page.locator('.arrange-cell--done').count()
     ok('待发布/已完成显示制作人+完成时间单元格', doneCells >= 1, 'done=' + doneCells)
     if (doneCells) {
       const doneCell = page.locator('.arrange-cell--done').first()
       ok('done 单元格含创作人标签', await doneCell.locator('.arrange-creator-tag').count() === 1)
-      ok('done 单元格不含紧急程度', await doneCell.locator('.arrange-priority-tag').count() === 0)
+      ok('done 单元格含紧急程度', await doneCell.locator('.arrange-priority-tag').count() === 1)
     }
 
     /* ---------- 3b. 收集创意弹窗：打开即无必填告警 ---------- */

@@ -18,9 +18,10 @@
         <el-select v-model="usage" style="width: 108px">
           <el-option v-for="u in USAGE_FILTER_OPTIONS" :key="u.value" :label="u.label" :value="u.value" />
         </el-select>
-        <el-select v-model="scope" style="width: 108px" @change="load">
+        <el-select v-model="scope" style="width: 118px" @change="load">
           <el-option value="all" label="全部成员" />
-          <el-option value="mine" label="仅我的" />
+          <el-option value="mine" label="我的创意" />
+          <el-option value="planned" label="我的计划" />
         </el-select>
         <el-button v-if="perm.can('ideas.create')" type="primary" :icon="Plus" @click="openCreate">收集创意</el-button>
       </template>
@@ -184,8 +185,13 @@
                   <span class="arrange-date">{{ formatDate(row.planned_at) }}</span>
                 </span>
               </button>
-              <!-- 待发布 / 已完成：制作人 + 完成时间，无紧急程度，不可点击 -->
+              <!-- 待发布 / 已完成：紧急程度 + 制作人 + 完成时间，不可点击 -->
               <div v-else class="arrange-cell arrange-cell--done">
+                <span class="arrange-priority">
+                  <span class="arrange-priority-tag" :class="'is-p' + (row.priority || 2)">
+                    {{ planPriorityLabel(row.priority || 2) }}
+                  </span>
+                </span>
                 <span class="arrange-info">
                   <span class="arrange-creator-tag" :title="row.creator_name || '未指定制作人'">{{ row.creator_name || '未指定' }}</span>
                   <span class="arrange-date">{{ formatDate(row.completed_at) }}</span>
