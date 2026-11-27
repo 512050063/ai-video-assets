@@ -537,6 +537,11 @@
     </div>
     <template #footer>
       <el-button @click="matchDialog.visible = false">取消</el-button>
+      <el-button
+        v-if="matchDialog.currentId"
+        :loading="matchDialog.unmatching"
+        @click="unmatchImport"
+      >取消关联</el-button>
       <el-button type="primary" :loading="matchDialog.saving" :disabled="!matchDialog.productionId" @click="confirmMatch">确认关联</el-button>
     </template>
   </el-dialog>
@@ -634,7 +639,7 @@ const auto = reactive({
 const matchDialog = reactive({
   visible: false, importId: null, row: null, productionId: null,
   currentId: null, currentTitle: '', currentCover: '', currentStatus: '', currentOwner: '',
-  loading: false, saving: false, keyword: '', options: []
+  loading: false, saving: false, unmatching: false, keyword: '', options: []
 })
 
 // 手动导入：隐藏 / 仅自己可见作品
@@ -1143,6 +1148,22 @@ async function confirmMatch() {
     ElMessage.error(e.response?.data?.detail || '匹配失败')
   } finally {
     matchDialog.saving = false
+  }
+}
+
+// 取消关联：创作记录回退「待发布」，来源创意状态同步回退
+async function unmatchImport() {
+  if (!matchDialog.currentId) return
+  matchDialog.unmatching = true
+  try {
+    await api.post(`/publish-stats/imports/${matchDialog.importId}/unmatch`)
+    ElMessage.success('已取消关联，创作记录状态已回退为待发布')
+    matchDialog.visible = false
+    await load()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '取消关联失败')
+  } finally {
+    matchDialog.unmatching = false
   }
 }
 

@@ -677,6 +677,7 @@ class ProductionOut(BaseModel):
     publish_account_id: Optional[int] = None
     publish_account_name: Optional[str] = None
     status: str
+    published_video_id: str = ""
     data_status: str = "正常"
     prompt: List[PromptSeg]
     reference_url: str

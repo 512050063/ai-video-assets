@@ -428,6 +428,14 @@ async function main() {
        'rows=' + accRows + ' badges=' + badgeCount)
     ok('无变化指标显示 0 占位', flatTexts.every((t) => t.trim() === '0'),
        'flat=' + flatTexts.length + ' texts=' + flatTexts.join(','))
+    if (badgeCount > 0) {
+      const badgeStyle = await page.locator('.delta-badge').first().evaluate((el) => {
+        const s = getComputedStyle(el)
+        return { bg: s.backgroundColor, color: s.color, radius: s.borderRadius }
+      })
+      ok('增量气泡为彩色底色白色数字', badgeStyle.bg !== 'rgba(0, 0, 0, 0)'
+         && badgeStyle.color === 'rgb(255, 255, 255)', JSON.stringify(badgeStyle))
+    }
     if (await snapBtns.count() > 0) {
       await snapBtns.first().click()
       await page.waitForTimeout(500)
@@ -448,7 +456,7 @@ async function main() {
     ok('视频创作页打开', resp.status() === 200 && body.includes('视频创作'))
     const prodStatLabels = (await page.locator('.stat-row .adm-stat .adm-stat-label').allInnerTexts()).map((t) => t.trim())
     ok('创作统计标签扩展为五项', prodStatLabels.length === 5
-       && ['创作总量', '制作中', '待发布', '已搁置', '已发布'].every((s) => prodStatLabels.includes(s)),
+       && ['创作总量', '制作中', '待发布', '已废弃', '已发布'].every((s) => prodStatLabels.includes(s)),
        prodStatLabels.join('|'))
     const prodHeaders = (await page.locator('.el-table__header th .cell').allInnerTexts()).map((t) => t.trim())
     ok('含创作时间列', prodHeaders.includes('创作时间'), prodHeaders.join('|'))
@@ -637,7 +645,7 @@ async function main() {
       await page.waitForTimeout(300)
     }
 
-    // 待发布→制作/搁置→还原待发布
+    // 待发布→返工/废弃→还原待发布
     if (testProdId) {
       await page.reload({ waitUntil: 'domcontentloaded' })
       await page.waitForTimeout(900)
@@ -645,25 +653,30 @@ async function main() {
         .locator('.prod-status-btn').click()
       await page.waitForTimeout(400)
       const sd = page.locator('.status-choice-dialog:visible')
-      ok('待发布点击状态弹制作/搁置选择', await sd.count() === 1)
+      ok('待发布点击状态弹返工/废弃选择', await sd.count() === 1)
       if (await sd.count()) {
-        const radios = (await sd.locator('.el-radio-button').allInnerTexts()).map((x) => x.trim())
-        ok('状态选择项为制作/搁置', radios.join(',') === '制作,搁置', radios.join(','))
-        await sd.locator('.el-radio-button').filter({ hasText: '搁置' }).click()
-        await sd.getByRole('button', { name: '确认' }).click()
+        const dlgBody = await text(sd.locator('.status-choice-body'))
+        ok('弹窗按编辑弹窗样式展示创意视频卡片',
+           dlgBody.includes('创意视频') && await sd.locator('.complete-ref-video').count() === 1
+           && dlgBody.includes('__SMOKE_FRONT__制作校验'), dlgBody.slice(0, 120))
+        ok('弹窗提示返工与废弃语义',
+           dlgBody.includes('视频已制作完成') && dlgBody.includes('返工') && dlgBody.includes('废弃'), dlgBody.slice(0, 120))
+        const footBtns = (await sd.locator('.el-dialog__footer button').allInnerTexts()).map((x) => x.trim())
+        ok('底部按钮为取消/废弃/返工', footBtns.join(',') === '取消,废弃,返工', footBtns.join(','))
+        await sd.getByRole('button', { name: '废弃', exact: true }).click()
         await page.waitForTimeout(600)
         const shelved = await page.evaluate(async ({ t, id }) => {
           const r = await fetch('/api/productions/' + id, { headers: { Authorization: 'Bearer ' + t } })
           return r.ok ? await r.json() : null
         }, { t: token, id: testProdId })
-        ok('选择搁置后状态写入搁置中', shelved && shelved.status === '搁置中', shelved && shelved.status)
+        ok('选择废弃后状态写入废弃', shelved && shelved.status === '废弃', shelved && shelved.status)
         await page.reload({ waitUntil: 'domcontentloaded' })
         await page.waitForTimeout(900)
         const shelvedRow = page.locator('.el-table__body tr').filter({ hasText: '__SMOKE_FRONT__制作校验' }).first()
-        ok('视频创作列表显示已搁置', (await shelvedRow.innerText()).includes('已搁置'))
+        ok('视频创作列表显示已废弃', (await shelvedRow.innerText()).includes('已废弃'))
         await shelvedRow.locator('.prod-status-btn').click()
         await page.waitForTimeout(400)
-        ok('已搁置点击状态弹还原确认', (await text(page.locator('.adm-confirm-card')).catch(() => '')).includes('还原为待发布'))
+        ok('已废弃点击状态弹还原确认', (await text(page.locator('.adm-confirm-card')).catch(() => '')).includes('还原为待发布'))
         await page.locator('.adm-confirm-card .adm-confirm-btn.is-primary').click()
         await page.waitForTimeout(600)
         const restored = await page.evaluate(async ({ t, id }) => {
@@ -850,6 +863,31 @@ async function main() {
       ok('匹配弹窗仅候选列表滚动（无双滚动条）',
          scrollInfo.bodyOverflow === 'hidden' && scrollInfo.listOverflow === 'auto' && !scrollInfo.bodyScrollable,
          JSON.stringify(scrollInfo))
+      ok('未关联时不显示取消关联按钮', await mdlg.getByRole('button', { name: '取消关联' }).count() === 0)
+      await page.evaluate(() => {
+        const vueApp = document.querySelector('#app')?.__vue_app__
+        const seen = new Set()
+        function visit(inst, d) {
+          if (!inst || d > 20 || (inst.uid != null && seen.has(inst.uid))) return
+          if (inst.uid != null) seen.add(inst.uid)
+          const st = inst.setupState
+          if (st?.matchDialog && 'options' in st.matchDialog) { st.matchDialog.currentId = 9001; return true }
+          const ch = inst.children
+          if (Array.isArray(ch)) { for (const c of ch) { if (c.component && visit(c.component, d + 1)) return true; if (c.__vnode && visit(c.__vnode.component, d + 1)) return true } }
+          if (inst.subTree && visitVNode(inst.subTree, d + 1)) return true
+          return false
+        }
+        function visitVNode(vn, d) {
+          if (!vn || d > 20) return false
+          if (vn.component && visit(vn.component, d)) return true
+          const ch = vn.children
+          if (Array.isArray(ch)) { for (const c of ch) { if (c && typeof c === 'object' && visitVNode(c, d + 1)) return true } }
+          return false
+        }
+        visit(vueApp._instance, 0)
+      })
+      await page.waitForTimeout(200)
+      ok('已关联时显示取消关联按钮', await mdlg.getByRole('button', { name: '取消关联' }).count() === 1)
       await page.keyboard.press('Escape')
       await page.waitForTimeout(300)
     }

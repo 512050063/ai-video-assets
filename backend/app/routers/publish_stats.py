@@ -7,6 +7,13 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from ..auth import ensure_owner, get_current_user, require_permission, scope_filter
 from ..database import get_db
 from ..models import DouyinImport, Idea, Production, PublishAccount, PublishStat, User
+from ..workflow import (
+    STATUS_PENDING,
+    bind_publish,
+    clear_binding_video,
+    has_binding,
+    unbind_publish,
+)
 from ..schemas import (
     DataStatusUpdate,
     DouyinImportIn,
@@ -389,29 +396,9 @@ def update_data_status(
     }
 
 
-def _sync_idea_status(db: Session, production: Production) -> None:
-    """制作记录状态变化时同步来源创意，避免两页状态不一致。"""
-    if not production.idea_id:
-        return
-    idea = db.query(Idea).get(production.idea_id)
-    if idea and idea.status != production.status:
-        idea.status = production.status
-        idea.updated_at = datetime.now()
-
-
-def _advance_production(db: Session, production: Production) -> None:
-    """录入数据即视为发布完成：制作记录与来源创意推进到「已完成」。"""
-    if production.status == "已完成":
-        _sync_idea_status(db, production)
-        return
-    now = datetime.now()
-    production.status = "已完成"
-    if production.published_at is None:
-        production.published_at = now
-    if production.completed_at is None:
-        production.completed_at = now
-    production.updated_at = now
-    _sync_idea_status(db, production)
+def _advance_production(db: Session, production: Production, video_id: str = "") -> None:
+    """写入发布数据即绑定事件：由统一状态机推进到「已发布」。"""
+    bind_publish(db, production, video_id)
 
 
 def _apply_stat_values(stat: PublishStat, data: PublishStatIn) -> None:
@@ -438,7 +425,7 @@ def _upsert_stat(db: Session, production: Production, data: PublishStatIn) -> tu
         existing = db.query(PublishStat).filter(PublishStat.video_id == video_id).first()
     if existing:
         _apply_stat_values(existing, data)
-        _advance_production(db, production)
+        _advance_production(db, production, video_id)
         return existing, False
     stat = PublishStat(
         production_id=production.id,
@@ -453,7 +440,7 @@ def _upsert_stat(db: Session, production: Production, data: PublishStatIn) -> tu
         recorded_at=data.recorded_at or datetime.now(),
     )
     db.add(stat)
-    _advance_production(db, production)
+    _advance_production(db, production, video_id)
     return stat, True
 
 
@@ -773,26 +760,24 @@ def match_import(
                 .filter(PublishStat.production_id == old_pid, PublishStat.video_id != row.video_id)
                 .count()
             )
-            if not other_stats:
-                old_production.status = "待发布"
-                old_production.published_at = None
-                old_production.updated_at = datetime.now()
-                _sync_idea_status(db, old_production)
+            other_imports = (
+                db.query(DouyinImport)
+                .filter(DouyinImport.production_id == old_pid, DouyinImport.id != import_id)
+                .count()
+            )
+            if not other_stats and not other_imports:
+                clear_binding_video(old_production, row.video_id)
+                unbind_publish(db, old_production)
 
-    # 关联创作记录并推进到「已完成」：时间先按采集作品发布时间落位，再由 _upsert_stat 统一推进状态并同步创意
+    # 关联创作记录：状态由 _upsert_stat 的绑定事件统一推进到「已发布」
     row.production_id = production.id
     row.status = "已匹配"
     row.data_status = production.data_status or "正常"
     row.matched_at = datetime.now()
-    if production.published_at is None:
-        production.published_at = published_at or datetime.now()
-    if production.completed_at is None:
-        production.completed_at = published_at or datetime.now()
     if row.account_id:
         production.publish_account_id = row.account_id
     if not production.publish_platform:
         production.publish_platform = "抖音"
-    production.updated_at = datetime.now()
 
     # 数据快照按 video_id 去重写入
     stat_in = PublishStatIn(
@@ -815,6 +800,41 @@ def match_import(
     db.commit()
     db.refresh(row)
     return _import_item_out(row, db)
+
+
+@router.post("/imports/{import_id}/unmatch", response_model=dict)
+def unmatch_import(
+    import_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """取消发布数据与创作记录的关联：创作记录回退「待发布」，来源创意同步回退。"""
+    require_permission(user, "publish-stats.create", db)
+    row = db.query(DouyinImport).get(import_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="待匹配作品不存在")
+    production_id = row.production_id
+    if not production_id:
+        return {"ok": True, "import_id": import_id, "production_id": None}
+
+    production = db.query(Production).get(production_id)
+    if production:
+        ensure_owner(production, user, "取消关联")
+    # 该作品对应的数据快照随解绑移除，否则仍视为已发布
+    for stat in db.query(PublishStat).filter(
+        PublishStat.production_id == production_id, PublishStat.video_id == row.video_id
+    ).all():
+        db.delete(stat)
+    row.production_id = None
+    row.status = "待匹配"
+    row.matched_at = None
+    db.flush()
+    if production:
+        clear_binding_video(production, row.video_id)
+        if not has_binding(db, production):
+            unbind_publish(db, production)
+    db.commit()
+    return {"ok": True, "import_id": import_id, "production_id": None}
 
 
 @router.delete("/imports/{import_id}", response_model=dict)
@@ -898,5 +918,10 @@ def delete_stat(
         if imp:
             db.delete(imp)
     db.delete(stat)
+    db.flush()
+    if production:
+        clear_binding_video(production, stat.video_id)
+        if not has_binding(db, production):
+            unbind_publish(db, production)
     db.commit()
     return {"ok": True}

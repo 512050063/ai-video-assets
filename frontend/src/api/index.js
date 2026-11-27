@@ -23,13 +23,13 @@ api.interceptors.response.use(
 )
 
 /* ================= 创意库 ================= */
-// 全流程 6 态：权威状态放创意；「备选库」改为独立备选标记 is_backup，不再是流程状态
+// 全流程 6 态：权威状态放制作记录，创意状态是它的投影；「备选库」为独立标记
 export const IDEA_STATUS_OPTIONS = [
   { value: '未使用', type: 'info', label: '未使用' },
   { value: '已排期', type: 'warning', label: '已排期' },
   { value: '制作中', type: 'primary', label: '制作中' },
   { value: '待发布', type: 'warning', label: '待发布' },
-  { value: '搁置中', type: 'info', label: '已搁置' },
+  { value: '废弃', type: 'info', label: '已废弃' },
   { value: '已完成', type: 'success', label: '已发布' }
 ]
 // 创意灵感页状态标签可直接切换的两态
@@ -64,10 +64,11 @@ export function planPriorityLabel(priority) {
 }
 
 /* ================= 视频制作 ================= */
-// 制作四态与创意全流程后四态一致：制作中 → 待发布 → 搁置中 / 已完成
+// 制作四态与创意全流程后四态一致：制作中 → 待发布 → 废弃 / 已完成
 export const PRODUCTION_STATUS_OPTIONS = [
   { value: '制作中', type: 'warning', label: '制作中' },
   { value: '待发布', type: 'primary', label: '待发布' },
+  { value: '废弃', type: 'info', label: '已废弃' },
   { value: '已完成', type: 'success', label: '已发布' }
 ]
 
@@ -83,10 +84,10 @@ export function productionStatusType(status) {
   return found ? found.type : 'info'
 }
 
-// 展示文案：内部状态值「已完成」对外显示为「已发布」，「搁置中」显示为「已搁置」
+// 展示文案：内部状态值「已完成」对外显示为「已发布」，「废弃」显示为「已废弃」
 export function productionStatusLabel(status) {
   if (status === '已完成') return '已发布'
-  if (status === '搁置中') return '已搁置'
+  if (status === '废弃') return '已废弃'
   return status || ''
 }
 

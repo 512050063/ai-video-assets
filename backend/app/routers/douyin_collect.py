@@ -30,6 +30,7 @@ from ..douyin_collector import (
     new_temp_profile_key,
 )
 from ..models import DouyinImport, Production, PublishAccount, PublishStat, User
+from ..workflow import bind_publish
 from ..schemas import (
     DouyinAccountFetchIn,
     DouyinAccountFetchOut,
@@ -581,6 +582,8 @@ def apply_stats_info(
         recorded_at=datetime.now(),
     )
     db.add(stat)
+    db.flush()
+    bind_publish(db, production, info.get("video_id") or "")
     # 顺带回填封面与标题（采集到的更准）
     if info.get("cover") and not production.cover:
         production.cover = info["cover"]

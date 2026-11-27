@@ -26,11 +26,18 @@ from ..schemas import (
     ProductionListOut,
 )
 from ..tag_service import collect_tags, drop_tags
+from ..workflow import (
+    STATUS_ABANDONED,
+    STATUS_MAKING,
+    STATUS_PENDING,
+    STATUS_PUBLISHED,
+    transition,
+)
 
 router = APIRouter(prefix="/productions", tags=["productions"])
 
-VALID_STATUSES = {"制作中", "待发布", "搁置中", "已完成"}
-# 制作记录状态与创意全流程状态一致（制作中/待发布/搁置中/已完成）；发布数据另用 data_status 管理正常/隐藏/删除
+VALID_STATUSES = {STATUS_MAKING, STATUS_PENDING, STATUS_ABANDONED, STATUS_PUBLISHED}
+# 制作记录状态与创意全流程状态一致；发布数据另用 data_status 管理正常/隐藏/删除
 # 兜底平台：配置中心可维护任意制作平台，实际校验以 system_settings.platforms 为准
 VALID_PLATFORMS = {"硬核", "小云雀", "三方平台"}
 VALID_ASSET_TYPES = {"cover", "reference_shot", "output"}
@@ -133,11 +140,11 @@ def _apply_in(db: Session, production: Production, data: ProductionIn):
             drop_tags(db, removed)
 
     # ---- 时间信息随状态自动流转 ----
-    # 制作中 → 开始时间；待发布/搁置中 → 完成时间；已完成 → 发布时间（并补齐完成时间）
+    # 制作中 → 开始时间；待发布/废弃 → 完成时间；已完成 → 发布时间（并补齐完成时间）
     now = datetime.now()
-    if production.status == "制作中" and production.produced_at is None:
+    if production.status == STATUS_MAKING and production.produced_at is None:
         production.produced_at = now
-    if production.status in ("待发布", "搁置中") and production.completed_at is None:
+    if production.status in (STATUS_PENDING, STATUS_ABANDONED) and production.completed_at is None:
         production.completed_at = now
     if production.status == "已完成":
         if production.published_at is None:
@@ -198,6 +205,7 @@ def _base_fields(production: Production) -> dict:
         "publish_platform": production.publish_platform or "",
         "publish_account_id": production.publish_account_id,
         "status": production.status or "制作中",
+        "published_video_id": production.published_video_id or "",
         "data_status": production.data_status or "正常",
         "prompt": production.prompt or [],
         "reference_url": production.reference_url or "",
@@ -288,13 +296,13 @@ def list_productions(
         q = q.filter(or_(Production.title.like(like), Production.remark.like(like)))
     if status:
         q = q.filter(Production.status == status)
-    # 视频创作页看 制作中 / 待发布 / 搁置中（active）；发布数据页看 待发布 / 搁置中 / 已完成
+    # 视频创作页看 制作中 / 待发布 / 废弃（active）；发布数据页看 待发布 / 废弃 / 已完成
     if stage == "making":
-        q = q.filter(Production.status == "制作中")
+        q = q.filter(Production.status == STATUS_MAKING)
     elif stage == "active":
-        q = q.filter(Production.status.in_(["制作中", "待发布", "搁置中"]))
+        q = q.filter(Production.status.in_([STATUS_MAKING, STATUS_PENDING, STATUS_ABANDONED]))
     elif stage == "finished":
-        q = q.filter(Production.status.in_(["待发布", "搁置中", "已完成"]))
+        q = q.filter(Production.status.in_([STATUS_PENDING, STATUS_ABANDONED, STATUS_PUBLISHED]))
     if platform:
         q = q.filter(Production.platform == platform)
     if character_id is not None:
@@ -336,10 +344,12 @@ def create_production(
             raise HTTPException(status_code=400, detail="请填写：" + "、".join(missing))
     production = Production(owner_id=user.id)
     _apply_in(db, production, data)
+    if production.status == STATUS_PUBLISHED:
+        raise HTTPException(status_code=400, detail="已发布状态只能由发布数据绑定触发")
     # 显式兜底默认状态：SQLAlchemy 列默认值要 flush 后才生效，这里提前设好，
     # 保证「制作中」自动写开始时间的逻辑能命中
     if not production.status:
-        production.status = "制作中"
+        production.status = STATUS_MAKING
         production.produced_at = datetime.now()
     # 创作人默认当前登录者；作者缺省同样取当前登录者（显式传入时以传入为准）
     if not production.author:
@@ -379,7 +389,14 @@ def update_production(
     # 制作人归属只允许管理员改，避免普通成员把记录转给他人
     if "owner_id" in data.model_fields_set and not is_admin(user):
         raise HTTPException(status_code=403, detail="仅管理员可修改制作人")
+    old_status = production.status
     _apply_in(db, production, data)
+    # 状态变更统一走状态机：校验合法流转、时间戳与来源创意同步
+    if "status" in data.model_fields_set and data.status != old_status:
+        transition(
+            db, production, data.status,
+            completed_at=data.completed_at, from_status=old_status,
+        )
     # 人物绑定 / 附件同样只在显式传入时才同步，避免部分更新清空关联
     if "characters" in data.model_fields_set:
         _sync_characters(db, production, data.characters)

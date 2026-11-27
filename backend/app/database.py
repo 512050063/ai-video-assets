@@ -172,6 +172,8 @@ def run_migrations():
         _add_column(conn, "productions", "completed_at", "DATETIME")
         # 视频制作：新增发布平台（与制作平台分开）
         _add_column(conn, "productions", "publish_platform", "VARCHAR(50) DEFAULT ''")
+        # 视频制作流程：当前绑定的发布作品 ID，作为状态锁定与解绑回退的唯一标识
+        _add_column(conn, "productions", "published_video_id", "VARCHAR(80) DEFAULT ''")
         # 数据中心记录状态：正常 / 隐藏 / 删除（默认正常，历史数据不受影响）
         _add_column(conn, "productions", "data_status", "VARCHAR(20) DEFAULT '正常'")
         try:
@@ -437,6 +439,59 @@ def run_migrations():
             )
         except Exception:
             pass
+
+        # ---- 1c. 流程状态收敛：搁置中 → 废弃；绑定关系决定「已发布」 ----
+        try:
+            conn.exec_driver_sql(
+                "UPDATE productions SET status='废弃' WHERE status IN ('搁置中', '已搁置')"
+            )
+            conn.exec_driver_sql(
+                "UPDATE ideas SET status='废弃' WHERE status IN ('搁置中', '已搁置')"
+            )
+        except Exception as exc:  # pragma: no cover
+            logging.warning("状态文案迁移失败: %s", exc)
+        if not _migration_done(conn, "workflow_status_v1"):
+            try:
+                rows = conn.exec_driver_sql(
+                    "SELECT id, status FROM productions"
+                ).fetchall()
+                for pid, old_status in rows:
+                    st = conn.exec_driver_sql(
+                        "SELECT video_id FROM publish_stats "
+                        "WHERE production_id=? AND video_id <> '' LIMIT 1", (pid,)
+                    ).fetchone()
+                    im = conn.exec_driver_sql(
+                        "SELECT video_id FROM douyin_imports "
+                        "WHERE production_id=? AND video_id <> '' LIMIT 1", (pid,)
+                    ).fetchone()
+                    video_id = (st[0] if st else None) or (im[0] if im else None) or ""
+                    bound = bool(
+                        conn.exec_driver_sql(
+                            "SELECT 1 FROM publish_stats WHERE production_id=? LIMIT 1", (pid,)
+                        ).fetchone()
+                        or conn.exec_driver_sql(
+                            "SELECT 1 FROM douyin_imports WHERE production_id=? LIMIT 1", (pid,)
+                        ).fetchone()
+                    )
+                    if bound:
+                        conn.exec_driver_sql(
+                            "UPDATE productions SET status='已完成', published_video_id=? WHERE id=?",
+                            (video_id, pid),
+                        )
+                    elif old_status == "已完成":
+                        conn.exec_driver_sql(
+                            "UPDATE productions SET status='待发布', published_video_id='' WHERE id=?",
+                            (pid,),
+                        )
+                # 创意状态是制作记录的投影：有制作记录时强制一致
+                conn.exec_driver_sql(
+                    "UPDATE ideas SET status = ("
+                    "  SELECT p.status FROM productions p WHERE p.idea_id = ideas.id LIMIT 1"
+                    ") WHERE EXISTS (SELECT 1 FROM productions p WHERE p.idea_id = ideas.id)"
+                )
+            except Exception as exc:  # pragma: no cover
+                logging.warning("流程状态漂移修复失败: %s", exc)
+            _mark_migration(conn, "workflow_status_v1")
 
         # ---- 2. 旧数据迁移 ----
         # 仅在新表为空时执行一次，避免旧 id 与新自增 id 撞车

@@ -367,12 +367,12 @@ def run():
                "total=%s" % finished.get("total"))
             code, making = req("GET", "/productions?stage=making")
             ok("制作页不含成品", code == 200 and not any(x["id"] == flow_prod_id for x in making.get("items", [])))
-            code, pub = req("PUT", "/productions/%s" % flow_prod_id, {
-                "status": "已完成", "publish_platform": "小红书", "published_url": "https://x.test/v/1"})
-            ok("成品发布写入发布平台", code == 200 and pub.get("publish_platform") == "小红书", pub.get("publish_platform"))
             code, stat = req("POST", "/publish-stats", {"production_id": flow_prod_id, "plays": 12, "likes": 3})
             if stat.get("id"):
                 CREATED["stats"].append(stat["id"])
+            code, pub = req("PUT", "/productions/%s" % flow_prod_id, {
+                "publish_platform": "小红书", "published_url": "https://x.test/v/1"})
+            ok("成品发布写入发布平台", code == 200 and pub.get("publish_platform") == "小红书", pub.get("publish_platform"))
             code, summ = req("GET", "/publish-stats/summary")
             fitem = next((x for x in summ.get("items", []) if x["production_id"] == flow_prod_id), None)
             ok("发布数据监视读取发布平台", fitem and fitem.get("publish_platform") == "小红书",
@@ -574,15 +574,17 @@ def run():
         ok("拒绝晚于今天的完成日期", code == 400 and "完成日期" in str(bad_future),
            "code=%s %s" % (code, bad_future))
 
-        code, p_pub = req("PUT", "/productions/%s" % prod_id, {"status": "已完成", "published_url": "https://www.douyin.com/video/9988"})
-        ok("状态流转到已完成并写 published_at", code == 200 and bool(p_pub.get("published_at")), p_pub.get("published_at"))
-
         code, p_back = req("PUT", "/productions/%s" % prod_id, {"status": "制作中"})
-        ok("状态回退清空完成/发布时间", code == 200 and p_back.get("completed_at") is None and p_back.get("published_at") is None,
+        ok("待发布返工回制作中并清空时间", code == 200 and p_back.get("completed_at") is None
+           and p_back.get("published_at") is None,
            "completed=%s published=%s" % (p_back.get("completed_at"), p_back.get("published_at")))
+        req("PUT", "/productions/%s" % prod_id, {"status": "待发布"})
 
-        code, filtered = req("GET", "/productions?status=制作中&platform=硬核")
-        ok("制作多条件筛选", code == 200 and any(x["id"] == prod_id for x in filtered.get("items", [])),
+        code, manual_pub = req("PUT", "/productions/%s" % prod_id, {"status": "已完成"})
+        ok("已发布只能由绑定触发，人工改状态被拒", code == 400, "code=%s %s" % (code, manual_pub))
+
+        code, filtered = req("GET", "/productions?status=待发布&platform=硬核")
+        ok("待发布多条件筛选", code == 200 and any(x["id"] == prod_id for x in filtered.get("items", [])),
            "total=%s" % filtered.get("total"))
 
     section("8. 发布数据 CRUD 与汇总")
@@ -593,6 +595,8 @@ def run():
         s1_id = s1.get("id") if isinstance(s1, dict) else None
         if s1_id:
             CREATED["stats"].append(s1_id)
+        _, p_pub = req("GET", "/productions/%s" % prod_id)
+        ok("绑定发布数据后写 published_at", bool(p_pub.get("published_at")), p_pub.get("published_at"))
 
         # 采集数据按 video_id 去重：同一作品重复写入只更新原快照
         vid = PREFIX.lower() + "-video-001"
@@ -819,8 +823,11 @@ def run():
             ok("制作继承封面与标签", prod_chk.get("cover") == "/uploads/2026-01/cover.png"
                and prod_chk.get("tags") == [PREFIX + "流程标签"], prod_chk.get("tags"))
             if acc_id:
+                    code, bind_f = req("POST", "/publish-stats", {"production_id": prod_f_id, "plays": 12, "likes": 2})
+                    if isinstance(bind_f, dict) and bind_f.get("id"):
+                        CREATED["stats"].append(bind_f["id"])
                     code, pub_f = req("PUT", "/productions/%s" % prod_f_id, {
-                        "status": "已完成", "publish_platform": "抖音",
+                        "publish_platform": "抖音",
                         "publish_account_id": acc_id, "video_file": "/uploads/2026-01/out.mp4",
                         "tags": [PREFIX + "流程标签"], "published_at": "2026-01-01T10:00:00"})
                     ok("成片与发布账号关联", code == 200 and pub_f.get("video_file") == "/uploads/2026-01/out.mp4"
@@ -1020,8 +1027,10 @@ def run():
             "production_id": linked_id, "plays": 9, "likes": 1})
         if isinstance(link_stat, dict) and link_stat.get("id"):
             CREATED["stats"].append(link_stat["id"])
-        # 人为回退到待发布，验证「已关联」过滤不只依赖状态
-        req("PUT", "/productions/%s" % linked_id, {"status": "待发布"})
+        # 已关联创作记录状态锁定，尝试手动回退应被拒绝，验证过滤不只依赖状态
+        lock_code, locked = req("PUT", "/productions/%s" % linked_id, {"status": "待发布"})
+        ok("已关联发布数据的创作状态锁定不可改", lock_code == 400,
+           "code=%s %s" % (lock_code, locked))
         code, opts = req("GET", "/publish-stats/match-options")
         opt_items = opts.get("items", []) if isinstance(opts, dict) else []
         opt_ids = [x.get("id") for x in opt_items]
@@ -1527,7 +1536,7 @@ def run():
     except Exception as exc:
         ok("账号更新总入口进程内验证", False, str(exc))
 
-    section("15k. 状态联动：搁置中 / 发布绑定后创意与创作同步已发布")
+    section("15k. 状态联动：废弃 / 发布绑定后创意与创作同步已发布")
     code, link_idea = req("POST", "/ideas", {"title": PREFIX + "状态联动创意"})
     link_idea_id = link_idea.get("id") if isinstance(link_idea, dict) else None
     if link_idea_id:
@@ -1541,13 +1550,13 @@ def run():
     if link_prod_id:
         CREATED["productions"].append(link_prod_id)
     if link_idea_id and link_prod_id:
-        code, shelved = req("PUT", "/productions/%s" % link_prod_id, {"status": "搁置中"})
+        code, shelved = req("PUT", "/productions/%s" % link_prod_id, {"status": "废弃"})
         _, idea_shelved = req("GET", "/ideas/%s" % link_idea_id)
-        ok("待发布可改为搁置中", code == 200 and shelved.get("status") == "搁置中", shelved.get("status"))
-        ok("搁置中同步到创意灵感", idea_shelved.get("status") == "搁置中", idea_shelved.get("status"))
+        ok("待发布可改为废弃", code == 200 and shelved.get("status") == "废弃", shelved.get("status"))
+        ok("废弃同步到创意灵感", idea_shelved.get("status") == "废弃", idea_shelved.get("status"))
         code, restored = req("PUT", "/productions/%s" % link_prod_id, {"status": "待发布"})
         _, idea_restored = req("GET", "/ideas/%s" % link_idea_id)
-        ok("搁置中可还原待发布", code == 200 and restored.get("status") == "待发布", restored.get("status"))
+        ok("废弃可还原待发布", code == 200 and restored.get("status") == "待发布", restored.get("status"))
         ok("还原待发布同步到创意灵感", idea_restored.get("status") == "待发布", idea_restored.get("status"))
 
         bind_vid = PREFIX + "状态联动绑定视频"
@@ -1567,6 +1576,15 @@ def run():
             _, idea_after = req("GET", "/ideas/%s" % link_idea_id)
             ok("绑定后创作记录更新为已发布", prod_after.get("status") == "已完成", prod_after.get("status"))
             ok("绑定后创意灵感同步为已发布", idea_after.get("status") == "已完成", idea_after.get("status"))
+            lock_code, locked = req("PUT", "/productions/%s" % link_prod_id, {"status": "待发布"})
+            ok("已发布创作记录状态锁定不可改", lock_code == 400, "code=%s %s" % (lock_code, locked))
+
+            code, unmatched = req("POST", "/publish-stats/imports/%s/unmatch" % bind_id)
+            _, prod_unlinked = req("GET", "/productions/%s" % link_prod_id)
+            _, idea_unlinked = req("GET", "/ideas/%s" % link_idea_id)
+            ok("取消关联接口成功", code == 200 and unmatched.get("production_id") is None, unmatched)
+            ok("取消关联后创作记录回退待发布", prod_unlinked.get("status") == "待发布", prod_unlinked.get("status"))
+            ok("取消关联后创意灵感回退待发布", idea_unlinked.get("status") == "待发布", idea_unlinked.get("status"))
             _, bind_stats = req("GET", "/publish-stats?production_id=%s" % link_prod_id)
             for st in (bind_stats if isinstance(bind_stats, list) else []):
                 if st.get("id") not in CREATED["stats"]:

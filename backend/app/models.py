@@ -350,7 +350,7 @@ class IdeaComment(Base):
 class Production(Base):
     """视频创作记录：创作流程第 2 步，一条记录覆盖制作到发布完成。
 
-    状态：制作中 / 待发布 / 已完成（展示为「已发布」）
+    状态：制作中 / 待发布 / 废弃（展示为「已废弃」）/ 已完成（展示为「已发布」）
     platform = 制作平台（硬核 / 小云雀 / 三方平台）
     publish_platform = 发布平台（抖音 / 小红书 / B站 / 视频号，配置中心维护）
     """
@@ -370,6 +370,7 @@ class Production(Base):
     publish_platform = Column(String(50), default="")  # 发布平台
     publish_account_id = Column(Integer, ForeignKey("publish_accounts.id"), nullable=True, index=True)
     status = Column(String(20), default="制作中", index=True)
+    published_video_id = Column(String(80), default="")  # 当前绑定的发布作品唯一 ID（状态锁定依据）
     data_status = Column(String(20), default="正常", index=True)  # 数据中心记录状态：正常 / 隐藏 / 删除
     prompt = Column(JSON, default=list)  # [{"seg": "人物背景", "text": "..."}]
     reference_url = Column(String(500), default="")  # 参考视频链接

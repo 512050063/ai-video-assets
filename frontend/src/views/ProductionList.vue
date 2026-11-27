@@ -127,7 +127,7 @@
               <button
                 type="button"
                 class="prod-status-btn"
-                :disabled="!canChangeStatus(row) || !['制作中', '待发布', '搁置中'].includes(row.status)"
+                :disabled="!canChangeStatus(row) || !['制作中', '待发布', '废弃'].includes(row.status)"
                 :title="statusClickTitle(row)"
                 @click="openStatusConfirm(row)"
               >
@@ -427,26 +427,55 @@
       @confirm="doChangeStatus"
     />
 
-    <!-- 待发布→选择制作 / 搁置 -->
+    <!-- 待发布→返工 / 废弃：参考编辑弹窗展示创意视频 -->
     <el-dialog
       v-model="statusChoice.visible"
-      title="选择状态"
-      width="420px"
+      title="待发布视频处理"
+      width="520px"
       class="adm-dialog-detail status-choice-dialog"
       :close-on-click-modal="false"
       append-to-body
     >
       <div class="status-choice-body">
-        <div class="status-choice-title">{{ statusChoice.row?.title || '该视频' }}</div>
-        <el-radio-group v-model="statusChoice.target" class="status-choice-group">
-          <el-radio-button label="制作中">制作</el-radio-button>
-          <el-radio-button label="搁置中">搁置</el-radio-button>
-        </el-radio-group>
-        <p class="status-choice-tip">选择「制作」返回制作中；选择「搁置」标记为已搁置，之后再点状态可还原为待发布。</p>
+        <div class="status-choice-label">创意视频</div>
+        <div class="complete-ref-video">
+          <img
+            v-if="statusChoice.row?.cover"
+            :src="statusChoice.row.cover"
+            class="complete-ref-cover"
+            alt="创意视频封面"
+          />
+          <img v-else src="/placeholder.svg" class="complete-ref-cover is-empty" alt="暂无封面" />
+          <div class="complete-ref-info">
+            <div class="complete-ref-title">{{ statusChoice.row?.title || '未命名视频' }}</div>
+            <div class="complete-ref-tags">
+              <template v-if="statusChoice.row?.tags && statusChoice.row.tags.length">
+                <span v-for="t in statusChoice.row.tags" :key="t" class="adm-tag-chip">#{{ t }}</span>
+              </template>
+              <span v-else class="adm-cell-empty">—</span>
+            </div>
+            <div class="complete-ref-readonly">
+              <OptionBadge
+                v-if="statusChoice.row?.category_name"
+                :name="statusChoice.row.category_name"
+                :color="settings.option('category', statusChoice.row.category_name).color"
+                :image="settings.option('category', statusChoice.row.category_name).image"
+                :display="settings.option('category', statusChoice.row.category_name).display"
+              />
+              <span v-else class="adm-cell-empty">—</span>
+              <el-tag size="small" effect="plain">{{ statusChoice.row?.owner_name || '未指定' }}</el-tag>
+              <el-tag :type="productionStatusType(statusChoice.row?.status)" size="small" effect="light">
+                {{ productionStatusLabel(statusChoice.row?.status) }}
+              </el-tag>
+            </div>
+          </div>
+        </div>
+        <p class="status-choice-tip">视频已制作完成，等待确认；若需修改制作请选择「返工」，若题材废弃请选择「废弃」。废弃后可再点状态还原为待发布。</p>
       </div>
       <template #footer>
         <el-button @click="statusChoice.visible = false">取消</el-button>
-        <el-button type="primary" :loading="statusChoice.loading" @click="doStatusChoice">确认</el-button>
+        <el-button :loading="statusChoice.loading" @click="doStatusChoice('废弃')">废弃</el-button>
+        <el-button type="primary" :loading="statusChoice.loading" @click="doStatusChoice('制作中')">返工</el-button>
       </template>
     </el-dialog>
 
@@ -557,8 +586,8 @@ const statusConfirm = reactive({
   visible: false, loading: false, row: null, target: '',
   title: '', message: '', confirmText: '', variant: 'success', icon: 'success'
 })
-// 待发布→制作 / 搁置：两个选项，默认回到制作
-const statusChoice = reactive({ visible: false, loading: false, row: null, target: '制作中' })
+// 待发布→返工 / 废弃：底部两个按钮直接决定目标状态
+const statusChoice = reactive({ visible: false, loading: false, row: null })
 // 制作中→待发布：选择完成日期（默认今天）
 const completeDialog = reactive({ visible: false, loading: false, row: null, date: '' })
 
@@ -573,14 +602,14 @@ function disableFutureDate(date) {
   now.setHours(23, 59, 59, 999)
   return date.getTime() > now.getTime()
 }
-// 五项统计：内部「已完成 / 搁置中」展示为「已发布 / 已搁置」
+// 五项统计：内部「废弃 / 已完成」展示为「已废弃 / 已发布」
 const counts = computed(() => {
   const all = list.value
   return {
     total: all.length,
     making: all.filter((i) => i.status === '制作中').length,
     pending: all.filter((i) => i.status === '待发布').length,
-    shelved: all.filter((i) => i.status === '搁置中').length,
+    abandoned: all.filter((i) => i.status === '废弃').length,
     published: all.filter((i) => i.status === '已完成').length
   }
 })
@@ -589,7 +618,7 @@ const statCards = computed(() => [
   { label: '创作总量', value: counts.value.total, icon: VideoCamera, tone: 'blue' },
   { label: '制作中', value: counts.value.making, icon: Loading, tone: 'lilac' },
   { label: '待发布', value: counts.value.pending, icon: Timer, tone: 'amber' },
-  { label: '已搁置', value: counts.value.shelved, icon: Warning, tone: 'amber' },
+  { label: '已废弃', value: counts.value.abandoned, icon: Warning, tone: 'amber' },
   { label: '已发布', value: counts.value.published, icon: CircleCheckFilled, tone: 'mint' }
 ])
 
@@ -732,7 +761,7 @@ function removeEditCharacter(id) {
   edit.form.characterIds = edit.form.characterIds.filter((x) => x !== id)
 }
 
-// 制作中/待发布/搁置中状态可点击流转；已完成只读
+// 制作中/待发布/废弃状态可点击流转；已发布锁定只读
 function canChangeStatus(row) {
   return perm.can('productions.edit') && (row.is_owner || auth.isAdmin)
 }
@@ -740,9 +769,9 @@ function canChangeStatus(row) {
 function statusClickTitle(row) {
   if (!canChangeStatus(row)) return '仅归属人或管理员可改'
   if (row.status === '制作中') return '点击确认完成并进入待发布'
-  if (row.status === '待发布') return '点击选择制作或搁置'
-  if (row.status === '搁置中') return '点击确认还原为待发布'
-  return productionStatusLabel(row.status)
+  if (row.status === '待发布') return '点击选择返工或废弃'
+  if (row.status === '废弃') return '点击确认还原为待发布'
+  return `${productionStatusLabel(row.status)}（已关联发布数据，状态不可修改）`
 }
 
 // 制作中→待发布前的信息完整性校验：创作平台 + 提示词内容必填
@@ -754,7 +783,7 @@ function missingProductionInfo(row) {
   return missing
 }
 
-// 制作中点状态：校验信息完整后确认完成→待发布；待发布点状态：选制作/搁置；搁置中点状态：还原为待发布
+// 制作中点状态：确认完成→待发布；待发布点状态：返工/废弃；废弃点状态：还原为待发布
 function openStatusConfirm(row) {
   if (!canChangeStatus(row)) return
   if (row.status === '制作中') {
@@ -769,15 +798,14 @@ function openStatusConfirm(row) {
     completeDialog.visible = true
     return
   } else if (row.status === '待发布') {
-    // 待发布→制作 / 搁置，两个选项由用户选择
+    // 待发布→返工 / 废弃，两个按钮直接决定目标状态
     statusChoice.row = row
-    statusChoice.target = '制作中'
     statusChoice.visible = true
     return
-  } else if (row.status === '搁置中') {
+  } else if (row.status === '废弃') {
     statusConfirm.target = '待发布'
     statusConfirm.title = '还原为待发布'
-    statusConfirm.message = `确定将「${row.title || '该视频'}」从已搁置还原为「待发布」吗？`
+    statusConfirm.message = `确定将「${row.title || '该视频'}」从已废弃还原为「待发布」吗？`
     statusConfirm.confirmText = '确认还原'
     statusConfirm.variant = 'warning'
     statusConfirm.icon = 'warning'
@@ -806,13 +834,13 @@ async function doChangeStatus() {
   }
 }
 
-// 待发布选择「制作 / 搁置」后写入状态
-async function doStatusChoice() {
+// 待发布选择「返工 / 废弃」后写入状态
+async function doStatusChoice(target) {
   const row = statusChoice.row
   if (!row) return
   statusChoice.loading = true
   try {
-    const { data } = await api.put(`/productions/${row.id}`, { status: statusChoice.target })
+    const { data } = await api.put(`/productions/${row.id}`, { status: target })
     row.status = data.status
     row.produced_at = data.produced_at
     row.completed_at = data.completed_at
@@ -952,10 +980,9 @@ onMounted(async () => {
 }
 .prod-status-btn:disabled { cursor: default; }
 
-/* 待发布→制作/搁置：状态选择弹窗 */
-.status-choice-body { display: flex; flex-direction: column; gap: 12px; }
-.status-choice-title { font-size: 13px; font-weight: 600; color: var(--adm-text-primary); }
-.status-choice-group { display: flex; gap: 8px; }
+/* 待发布→返工/废弃：与编辑弹窗一致的创意视频卡片 + 双按钮 */
+.status-choice-body { display: flex; flex-direction: column; gap: 10px; padding: 4px 0; }
+.status-choice-label { font-size: 13px; font-weight: 600; color: var(--adm-text-regular); }
 .status-choice-tip { margin: 0; font-size: 12px; line-height: 1.6; color: var(--adm-text-secondary); }
 
 .char-cell { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }

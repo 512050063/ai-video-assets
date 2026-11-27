@@ -1006,16 +1006,25 @@ onUnmounted(() => {
 .delta-value { position: relative; display: inline-block; padding-right: 20px; }
 .delta-badge {
   position: absolute;
-  top: -6px;
-  right: -2px;
+  top: -7px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  color: #fff;
   font-size: 10px;
   line-height: 1;
   font-weight: 600;
   white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
 }
-.delta-badge.is-up { color: #e05252; }
-.delta-badge.is-down { color: #1fa463; }
-.delta-badge.is-flat { color: #a8b0bb; }
+.delta-badge.is-up { background: #e05252; }
+.delta-badge.is-down { background: #1fa463; }
+.delta-badge.is-flat { background: #a8b0bb; }
 /* 运营管理：更新节奏 / 责任人上下两行标签 */
 .rhythm-owner-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 .management-tag-wrap { display: inline-flex; cursor: pointer; width: 84px; }
