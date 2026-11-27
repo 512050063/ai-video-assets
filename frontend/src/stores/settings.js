@@ -12,7 +12,7 @@ export const useSettingsStore = defineStore('settings', {
   state: () => ({
     items: {
       site: { name: '视频资产管理', subtitle: 'Assets Console', logo: '' },
-      douyin: {},
+      douyin: { auto_check_imported: true },
       welcome: { city: '深圳', latitude: null, longitude: null },
       vote: { daily_limit: 5 },
       platforms: [],

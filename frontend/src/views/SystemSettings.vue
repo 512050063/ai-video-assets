@@ -53,6 +53,13 @@
                 </div>
                 <el-switch v-model="form.douyin.reject_duplicate" @change="persist('douyin', form.douyin)" />
               </div>
+              <div class="switch-row">
+                <div>
+                  <div class="switch-label">获取列表时自动勾选已导入作品</div>
+                  <div class="switch-desc">发布数据页拉取作品列表后，已导入作品自动勾选并标记；只写入勾选的视频，取消勾选则不更新已有数据</div>
+                </div>
+                <el-switch v-model="form.douyin.auto_check_imported" @change="persist('douyin', form.douyin)" />
+              </div>
             </div>
           </el-tab-pane>
           <el-tab-pane label="自动更新" name="auto_update">
@@ -319,7 +326,7 @@ const logFilter = reactive({ module: '', keyword: '' })
 
 const form = reactive({
   site: { name: '', subtitle: '' },
-  douyin: { auto_resolve: true, auto_parse_title: true, reject_duplicate: true },
+  douyin: { auto_resolve: true, auto_parse_title: true, reject_duplicate: true, auto_check_imported: true },
   auto_update: { enabled: true, hour: 8, minute: 0, video_limit: 20, sync_publish_data: true },
   vote: { daily_limit: 5 },
   display: { category: 'full', platform: 'full', publish: 'full' },

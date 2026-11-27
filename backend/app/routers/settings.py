@@ -41,6 +41,8 @@ DEFAULT_SETTINGS = {
         "auto_resolve": True,
         "auto_parse_title": True,
         "reject_duplicate": True,
+        # 发布数据页拉取作品列表时，已导入作品默认勾选；仅勾选的才写入/更新。
+        "auto_check_imported": True,
     },
     # 自动更新机制：每天到点更新在线账号资料、写入账号快照，并同步发布数据作品
     "auto_update": {

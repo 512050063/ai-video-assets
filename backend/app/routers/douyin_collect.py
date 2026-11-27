@@ -28,7 +28,7 @@ from ..douyin_collector import (
     login_douyin,
     new_temp_profile_key,
 )
-from ..models import Production, PublishAccount, PublishStat, User
+from ..models import DouyinImport, Production, PublishAccount, PublishStat, User
 from ..schemas import (
     DouyinAccountFetchIn,
     DouyinAccountFetchOut,
@@ -284,10 +284,13 @@ def fetch_account_videos_info(
         )
     _mark_login_state(account, True)
     db.commit()
+    videos = _mark_imported_flags(db, info.get("videos") or [])
+    info = dict(info)
+    info["videos"] = videos
     return DouyinVideosFetchOut(
         ok=True,
         channel=info.get("channel", ""),
-        message=f"获取到 {len(info.get('videos') or [])} 条作品",
+        message=f"获取到 {len(videos)} 条作品",
         data=info,
     )
 
@@ -301,6 +304,21 @@ def _account_video_query(account) -> str:
         or (account.douyin_uid or "").strip()
         or (account.account_id or "").strip()
     )
+
+
+def _mark_imported_flags(db: Session, videos: list) -> list:
+    """给采集结果标记 imported / import_id，供前端自动勾选「已导入」作品。"""
+    items = [v for v in (videos or []) if isinstance(v, dict)]
+    ids = sorted({str(v.get("video_id") or "").strip() for v in items if v.get("video_id")})
+    imported = {}
+    if ids:
+        rows = db.query(DouyinImport).filter(DouyinImport.video_id.in_(ids)).all()
+        imported = {r.video_id: r.id for r in rows}
+    for item in items:
+        import_id = imported.get(str(item.get("video_id") or "").strip())
+        item["import_id"] = import_id
+        item["imported"] = bool(import_id)
+    return items
 
 
 @router.post("/videos/from-account", response_model=DouyinVideosFetchOut)
@@ -417,6 +435,7 @@ def fetch_videos_batch(
                         "message": f"获取到 {len(account_videos)} 条作品", "need_login": False,
                         "videos": account_videos})
     db.commit()
+    videos = _mark_imported_flags(db, videos)
 
     succeeded = sum(1 for r in results if r["ok"])
     failed = [r for r in results if not r["ok"]]

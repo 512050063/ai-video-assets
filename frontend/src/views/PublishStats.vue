@@ -395,6 +395,11 @@
           批量导入（{{ selectedAutoVideos.length }}）
         </el-button>
       </div>
+      <div class="auto-config">
+        <el-checkbox v-model="autoCheckImported">
+          已导入作品自动勾选（仅勾选的才写入/更新，取消勾选则不更新）
+        </el-checkbox>
+      </div>
       <div class="auto-tip">
         账号默认跟随当前账号标签，条数默认「全部」。仅能采集主页公开展示的作品；抖音「隐藏 / 仅自己可见」作品不在公开列表，无法自动获取，请在表格右上角「手动导入」中录入。
       </div>
@@ -419,6 +424,7 @@
           <div class="auto-info">
             <div class="auto-title">
               {{ v.title || '未命名作品' }}
+              <span v-if="v.imported" class="auto-imported-badge">已导入</span>
               <span v-if="v.account_name" class="auto-video-account">{{ v.account_name }}</span>
             </div>
             <div class="auto-nums">
@@ -430,7 +436,18 @@
               <TagCell :tags="v.tags || []" />
             </div>
           </div>
-          <el-button size="small" type="primary" plain :loading="auto.importingId === v.video_id" @click="importOneVideo(v)">导入</el-button>
+          <el-tooltip :disabled="auto.checked[i]" content="请先勾选该作品；取消勾选不会更新已有数据" placement="top">
+            <span>
+              <el-button
+                size="small"
+                type="primary"
+                plain
+                :disabled="!auto.checked[i]"
+                :loading="auto.importingId === v.video_id"
+                @click="importOneVideo(v)"
+              >导入</el-button>
+            </span>
+          </el-tooltip>
         </div>
       </div>
       <div v-else-if="!auto.message" class="auto-empty">选择账号与条数后点击「获取视频列表」，公开作品会显示在这里</div>
@@ -515,7 +532,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, Check, Clock, Connection, EditPen, Share, Star, TrendCharts, UserFilled, VideoPlay } from '@element-plus/icons-vue'
@@ -610,6 +627,18 @@ const manual = reactive({
 
 // 已勾选的采集作品
 const selectedAutoVideos = computed(() => auto.videos.filter((_, i) => auto.checked[i]))
+
+// 已导入作品自动勾选：配置保存在「系统设置 → 抖音解析」，默认开启
+const autoCheckImported = computed({
+  get: () => settings.douyin?.auto_check_imported !== false,
+  set: (value) => {
+    const next = { ...(settings.items.douyin || {}), auto_check_imported: !!value }
+    settings.items.douyin = next
+    settings.save('douyin', next).catch(() => {
+      ElMessage.warning('配置保存失败，本次仍按当前选择执行')
+    })
+  }
+})
 
 // 匹配弹窗：只展示待发布的创作记录，再按关键字过滤
 const filteredMatchOptions = computed(() => {
@@ -949,7 +978,7 @@ async function fetchDouyinList() {
       { timeout: 300000 }
     )
     auto.videos = data.videos || []
-    auto.checked = auto.videos.map(() => false)
+    auto.checked = auto.videos.map((v) => !!(autoCheckImported.value && v.imported))
     auto.message = data.message || (data.ok ? '获取完成' : '获取失败')
     auto.need_login = !!data.need_login
     if (data.ok && auto.videos.length) ElMessage.success(`已获取 ${auto.videos.length} 条作品`)
@@ -962,6 +991,13 @@ async function fetchDouyinList() {
 
 // 兼容旧调用名
 const doAutoFetch = fetchDouyinList
+
+// 切换配置后即时同步当前列表的勾选状态
+watch(autoCheckImported, (enabled) => {
+  if (!auto.videos.length) return
+  auto.checked = auto.videos.map((v) => !!(enabled && v.imported))
+  syncAutoAllChecked()
+})
 
 // -------------------------------------------------- 抖音作品导入：直接写入发布数据表
 function videoToImport(v) {
@@ -1357,7 +1393,14 @@ onMounted(async () => {
 
 /* 自动采集 */
 .auto-body { display: flex; flex-direction: column; gap: 14px; }
-.auto-query { display: flex; align-items: center; gap: 10px; }
+.auto-query { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.auto-config {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--adm-blue-bg, #eef4ff);
+  font-size: 12.5px;
+  color: var(--adm-text-regular);
+}
 .auto-tip { font-size: 12px; color: var(--adm-text-placeholder); margin-top: -8px; }
 .auto-error {
   padding: 12px;
@@ -1393,6 +1436,16 @@ onMounted(async () => {
 .auto-cover.is-empty { opacity: 0.6; }
 .auto-info { flex: 1; min-width: 0; }
 .auto-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.auto-imported-badge {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--adm-green-bg, #eaf7ee);
+  color: var(--adm-green, #2e9b5b);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
 .auto-tags { margin-top: 4px; }
 .auto-video-account {
   margin-left: 8px;

@@ -293,6 +293,25 @@ function parseCount(v) {
   return n ? Math.round(parseFloat(n[0])) : 0
 }
 
+/**
+ * 抖音主页滚动容器不是 document.body，单纯 page.mouse.wheel 只能触发第一页。
+ * 找到页面上最大可滚动容器并滚到底，同时兼容 wheel，触发后续作品分页请求。
+ */
+async function scrollVideoFeed(page) {
+  await page.evaluate(() => {
+    const candidates = []
+    for (const el of document.querySelectorAll('*')) {
+      const sh = el.scrollHeight || 0
+      const ch = el.clientHeight || 0
+      if (sh > ch + 50 && ch > 200) candidates.push({ el, size: sh - ch })
+    }
+    candidates.sort((a, b) => b.size - a.size)
+    if (candidates[0]) candidates[0].el.scrollTop = candidates[0].el.scrollHeight
+    if (document.scrollingElement) document.scrollingElement.scrollTop = document.scrollingElement.scrollHeight
+  }).catch(() => {})
+  await page.mouse.wheel(0, 2200).catch(() => {})
+}
+
 function normalizeUser(user, homeUrl) {
   const avatar =
     (user.avatar_larger && user.avatar_larger.url_list && user.avatar_larger.url_list[0]) ||
@@ -400,7 +419,7 @@ async function main() {
   const page = context.pages()[0] || (await context.newPage())
 
   // 监听关键 XHR：详情 / 搜索用户 / 用户主页资料 / 用户作品列表
-  const live = { detail: null, users: [], profile: null, posts: [] }
+  const live = { detail: null, users: [], profile: null, posts: [], postHasMore: true, postPages: 0 }
   page.on('response', async (resp) => {
     try {
       const url = resp.url()
@@ -417,6 +436,9 @@ async function main() {
         if (json && json.user) live.profile = json.user
       } else if (/\/aweme\/v1\/web\/aweme\/post/.test(url)) {
         json = await resp.json()
+        live.postPages += 1
+        // has_more=0 表示抖音已返回全部公开作品，继续滚动没有意义。
+        live.postHasMore = json && json.has_more !== undefined ? !!json.has_more : true
         const list = (json && json.aweme_list) || []
         for (const a of list) {
           if (a && a.aweme_id && !live.posts.some((x) => x.aweme_id === a.aweme_id)) live.posts.push(a)
@@ -559,9 +581,23 @@ async function main() {
     }
 
     if (action === 'videos') {
-      for (let i = 0; i < 16 && live.posts.length < (payload.limit || 10); i++) {
-        await page.waitForTimeout(500)
-        if (i % 4 === 3) await page.mouse.wheel(0, 1600).catch(() => {})
+      const limit = Number(payload.limit || 10)
+      // 前 2.5 秒等首屏作品接口；之后滚动加载直到达到目标条数或抖音返回完。
+      const deadline = Date.now() + 45000
+      let lastCount = live.posts.length
+      let idleRounds = 0
+      for (let i = 0; i < 90 && live.posts.length < limit && Date.now() < deadline; i++) {
+        await page.waitForTimeout(450)
+        if (live.posts.length > lastCount) {
+          lastCount = live.posts.length
+          idleRounds = 0
+        } else {
+          idleRounds += 1
+        }
+        if (i % 2 === 0) await scrollVideoFeed(page)
+        // has_more=0 时再观察几轮，避免并发请求尚未落地；之后提前结束。
+        if (!live.postHasMore && live.postPages > 0 && idleRounds >= 6) break
+        if (idleRounds >= 24) break
       }
       if (await isCaptcha(page)) {
         out(captchaResult())
@@ -571,7 +607,6 @@ async function main() {
         fail('未获取到作品列表，可能未登录或主页链接无效', '请填写主页链接（https://www.douyin.com/user/...）或先完成抖音验证', true)
         return
       }
-      const limit = Number(payload.limit || 10)
       out({
         ok: true,
         data: {
