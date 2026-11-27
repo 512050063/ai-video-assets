@@ -296,12 +296,7 @@
                   :title="`点击打开抖音：${edit.form.title || '未命名视频'}`"
                 >{{ edit.form.title || '未命名视频' }}</a>
                 <div v-else class="ref-title">{{ edit.form.title || '未命名视频' }}</div>
-                <div class="ref-tags">
-                  <template v-if="edit.form.tags && edit.form.tags.length">
-                    <span v-for="t in edit.form.tags" :key="t" class="adm-tag-chip">#{{ t }}</span>
-                  </template>
-                  <span v-else class="adm-cell-empty">—</span>
-                </div>
+                <TagCell :tags="edit.form.tags || []" :max-lines="1" />
                 <!-- 只读项：类型 / 制作人 / 状态，放在参考视频卡片内，不带小标题 -->
                 <div class="readonly-row">
                   <div class="readonly-item">
@@ -448,12 +443,7 @@
           <img v-else src="/placeholder.svg" class="complete-ref-cover is-empty" alt="暂无封面" />
           <div class="complete-ref-info">
             <div class="complete-ref-title">{{ statusChoice.row?.title || '未命名视频' }}</div>
-            <div class="complete-ref-tags">
-              <template v-if="statusChoice.row?.tags && statusChoice.row.tags.length">
-                <span v-for="t in statusChoice.row.tags" :key="t" class="adm-tag-chip">#{{ t }}</span>
-              </template>
-              <span v-else class="adm-cell-empty">—</span>
-            </div>
+            <TagCell :tags="statusChoice.row?.tags || []" :max-lines="1" />
             <div class="complete-ref-readonly">
               <OptionBadge
                 v-if="statusChoice.row?.category_name"
@@ -474,7 +464,7 @@
       </div>
       <template #footer>
         <el-button @click="statusChoice.visible = false">取消</el-button>
-        <el-button :loading="statusChoice.loading" @click="doStatusChoice('废弃')">废弃</el-button>
+        <el-button type="danger" plain :loading="statusChoice.loading" @click="doStatusChoice('废弃')">废弃</el-button>
         <el-button type="primary" :loading="statusChoice.loading" @click="doStatusChoice('制作中')">返工</el-button>
       </template>
     </el-dialog>
@@ -499,12 +489,7 @@
           <img v-else src="/placeholder.svg" class="complete-ref-cover is-empty" alt="暂无封面" />
           <div class="complete-ref-info">
             <div class="complete-ref-title">{{ completeDialog.row?.title || '未命名视频' }}</div>
-            <div class="complete-ref-tags">
-              <template v-if="completeDialog.row?.tags && completeDialog.row.tags.length">
-                <span v-for="t in completeDialog.row.tags" :key="t" class="adm-tag-chip">#{{ t }}</span>
-              </template>
-              <span v-else class="adm-cell-empty">—</span>
-            </div>
+            <TagCell :tags="completeDialog.row?.tags || []" :max-lines="1" />
             <div class="complete-ref-readonly">
               <OptionBadge
                 v-if="completeDialog.row?.category_name"
@@ -562,6 +547,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog.vue'
 import DialogHeader from '../components/ui/DialogHeader.vue'
 import OptionBadge from '../components/ui/OptionBadge.vue'
 import StatCard from '../components/ui/StatCard.vue'
+import TagCell from '../components/ui/TagCell.vue'
 import { api, formatDate, productionStatusLabel, productionStatusType } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { usePermissionStore } from '../stores/permission'
@@ -1037,12 +1023,14 @@ onMounted(async () => {
 .complete-ref-info {
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
-  height: 72px;
+  justify-content: flex-start;
+  gap: 5px;
+  min-height: 72px;
   min-width: 0;
   flex: 1;
 }
 .complete-ref-title {
+  flex-shrink: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--adm-text-primary);
@@ -1051,8 +1039,10 @@ onMounted(async () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.complete-ref-tags { display: flex; flex-wrap: wrap; gap: 5px; }
-.complete-ref-readonly { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.complete-ref-readonly { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex-shrink: 0; }
+/* 标签区：单行折叠，超出显示 +N，标题不被挤压 */
+.complete-ref-info :deep(.tag-cell-root),
+.ref-video-info :deep(.tag-cell-root) { flex-shrink: 0; }
 .complete-field label {
   display: block;
   margin-bottom: 6px;
@@ -1161,13 +1151,13 @@ onMounted(async () => {
 .ref-video-info {
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
-  height: 92px;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 92px;
   min-width: 0;
   flex: 1;
 }
-.ref-title { font-size: 14px; font-weight: 600; color: var(--adm-text-primary); line-height: 1.4; }
-.ref-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.ref-title { flex-shrink: 0; font-size: 14px; font-weight: 600; color: var(--adm-text-primary); line-height: 1.4; }
 .ref-title-link { text-decoration: none; cursor: pointer; }
 .ref-title-link:hover { text-decoration: underline; color: var(--el-color-primary); }
 .prompt-textarea { width: 100%; }

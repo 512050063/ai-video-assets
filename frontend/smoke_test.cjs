@@ -435,6 +435,18 @@ async function main() {
       })
       ok('增量气泡为彩色底色白色数字', badgeStyle.bg !== 'rgba(0, 0, 0, 0)'
          && badgeStyle.color === 'rgb(255, 255, 255)', JSON.stringify(badgeStyle))
+      const badgeScale = await page.locator('.delta-badge').first().evaluate((el) => {
+        const num = el.parentElement.querySelector('.adm-cell-num')
+        const ns = getComputedStyle(num)
+        return {
+          badgeFont: parseFloat(getComputedStyle(el).fontSize),
+          badgeHeight: Math.round(el.getBoundingClientRect().height),
+          numFont: parseFloat(ns.fontSize),
+          numWeight: ns.fontWeight
+        }
+      })
+      ok('气泡字号小于数字且尺寸紧凑', badgeScale.badgeFont < badgeScale.numFont
+         && badgeScale.badgeHeight <= 16 && badgeScale.numWeight === '600', JSON.stringify(badgeScale))
     }
     if (await snapBtns.count() > 0) {
       await snapBtns.first().click()
@@ -538,7 +550,7 @@ async function main() {
       ok('确认弹窗展示参考视频卡片（封面/标题/标签区/只读项）',
          await cdlg.locator('.complete-ref-video .complete-ref-cover').count() === 1
          && await cdlg.locator('.complete-ref-video .complete-ref-title').count() === 1
-         && await cdlg.locator('.complete-ref-video .complete-ref-tags').count() === 1
+         && await cdlg.locator('.complete-ref-video .tag-cell:not(.tag-cell--measure)').count() === 1
          && await cdlg.locator('.complete-ref-video .el-tag').count() >= 2)
       ok('完成日期框含完成语义与日期输入', /完成/.test(await text(cdlg)) && await cdlg.locator('input').count() >= 1, await text(cdlg))
       const dateVal = await cdlg.locator('input').first().inputValue()
@@ -663,6 +675,56 @@ async function main() {
            dlgBody.includes('视频已制作完成') && dlgBody.includes('返工') && dlgBody.includes('废弃'), dlgBody.slice(0, 120))
         const footBtns = (await sd.locator('.el-dialog__footer button').allInnerTexts()).map((x) => x.trim())
         ok('底部按钮为取消/废弃/返工', footBtns.join(',') === '取消,废弃,返工', footBtns.join(','))
+        const abandonCls = await sd.locator('.el-dialog__footer button').nth(1).getAttribute('class')
+        ok('废弃按钮使用红色样式', abandonCls.includes('el-button--danger') && abandonCls.includes('is-plain'), abandonCls)
+
+        // 注入大量标签，验证标题不被挤压、标签单行折叠为 +N
+        await page.evaluate(() => {
+          const vueApp = document.querySelector('#app')?.__vue_app__
+          const seen = new Set()
+          function visit(inst, d) {
+            if (!inst || d > 20 || (inst.uid != null && seen.has(inst.uid))) return false
+            if (inst.uid != null) seen.add(inst.uid)
+            const st = inst.setupState
+            if (st?.statusChoice && 'row' in st.statusChoice && st.statusChoice.visible) {
+              st.statusChoice.row = {
+                ...(st.statusChoice.row || {}),
+                title: '__SMOKE_FRONT__制作校验',
+                tags: Array.from({ length: 12 }, (_, i) => '话题' + i)
+              }
+              return true
+            }
+            const ch = inst.children
+            if (Array.isArray(ch)) { for (const c of ch) { if (c.component && visit(c.component, d + 1)) return true; if (c.__vnode && visit(c.__vnode.component, d + 1)) return true } }
+            if (inst.subTree && visitVNode(inst.subTree, d + 1)) return true
+            return false
+          }
+          function visitVNode(vn, d) {
+            if (!vn || d > 20) return false
+            if (vn.component && visit(vn.component, d)) return true
+            const ch = vn.children
+            if (Array.isArray(ch)) { for (const c of ch) { if (c && typeof c === 'object' && visitVNode(c, d + 1)) return true } }
+            return false
+          }
+          visit(vueApp._instance, 0)
+        })
+        await page.waitForTimeout(300)
+        const cardLayout = await sd.locator('.complete-ref-video').evaluate((el) => {
+          const title = el.querySelector('.complete-ref-title')
+          const cell = el.querySelector('.tag-cell:not(.tag-cell--measure)')
+          const chips = Array.from(cell.querySelectorAll('.adm-tag-chip'))
+          const tops = chips.map((c) => Math.round(c.getBoundingClientRect().top))
+          return {
+            titleVisible: title.getBoundingClientRect().height > 0 && title.textContent.includes('__SMOKE_FRONT__制作校验'),
+            chipCount: chips.length,
+            rows: new Set(tops).size,
+            hasMore: chips.some((c) => c.classList.contains('is-more')),
+            cellHeight: Math.round(cell.getBoundingClientRect().height)
+          }
+        })
+        ok('参考视频标题不被标签挤压且可见', cardLayout.titleVisible, JSON.stringify(cardLayout))
+        ok('标签最多一行且溢出显示 +N',
+           cardLayout.rows === 1 && cardLayout.hasMore && cardLayout.cellHeight <= 24, JSON.stringify(cardLayout))
         await sd.getByRole('button', { name: '废弃', exact: true }).click()
         await page.waitForTimeout(600)
         const shelved = await page.evaluate(async ({ t, id }) => {

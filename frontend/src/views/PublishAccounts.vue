@@ -1003,24 +1003,24 @@ onUnmounted(() => {
 .copy-id-btn:hover { color: var(--el-color-primary); }
 .login-status-tag { cursor: pointer; min-width: 44px; }
 /* 账号数据：数值右上角显示相对上次采集的增减（红涨绿跌） */
-.delta-value { position: relative; display: inline-block; padding-right: 20px; }
+.delta-value { position: relative; display: inline-block; padding-right: 15px; }
+.delta-value .adm-cell-num { font-weight: 600; }
 .delta-badge {
   position: absolute;
-  top: -7px;
-  right: -4px;
+  top: -5px;
+  right: -6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 17px;
-  height: 17px;
-  padding: 0 4px;
-  border-radius: 9px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
   color: #fff;
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1;
   font-weight: 600;
   white-space: nowrap;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.16);
 }
 .delta-badge.is-up { background: #e05252; }
 .delta-badge.is-down { background: #1fa463; }
