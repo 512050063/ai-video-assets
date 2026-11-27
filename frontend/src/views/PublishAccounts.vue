@@ -121,7 +121,7 @@
               <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
               <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ row.video_count || 0 }}</span>
-                <span v-if="deltaOf(row, 'video_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'video_count'))">
+                <span class="delta-badge" :class="deltaClass(deltaOf(row, 'video_count'))">
                   {{ deltaText(deltaOf(row, 'video_count')) }}
                 </span>
               </span>
@@ -133,7 +133,7 @@
               <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
               <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ formatCount(row.likes_count) }}</span>
-                <span v-if="deltaOf(row, 'likes_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'likes_count'))">
+                <span class="delta-badge" :class="deltaClass(deltaOf(row, 'likes_count'))">
                   {{ deltaText(deltaOf(row, 'likes_count')) }}
                 </span>
               </span>
@@ -145,7 +145,7 @@
               <span v-if="isSyncing(row)" class="adm-cell-num is-syncing">同步中…</span>
               <span v-else class="delta-value">
                 <span class="adm-cell-num">{{ formatCount(row.followers_count) }}</span>
-                <span v-if="deltaOf(row, 'followers_count') !== null" class="delta-badge" :class="deltaClass(deltaOf(row, 'followers_count'))">
+                <span class="delta-badge" :class="deltaClass(deltaOf(row, 'followers_count'))">
                   {{ deltaText(deltaOf(row, 'followers_count')) }}
                 </span>
               </span>
@@ -548,23 +548,21 @@ function formatCount(n) {
   return String(v)
 }
 
-// 相对上一次采集的增量；无历史快照或增量为 0 时返回 null，不显示角标
+// 相对上一次采集的增量；无历史快照或增量为 0 时返回 0，气泡常驻用于占位
 function deltaOf(row, key) {
   const d = row?.deltas
-  if (!d || d[key] === undefined || d[key] === null) return null
+  if (!d || d[key] === undefined || d[key] === null) return 0
   const v = Number(d[key])
-  if (!Number.isFinite(v) || v === 0) return null
-  return v
+  return Number.isFinite(v) ? v : 0
 }
 
 function deltaText(v) {
-  if (v === null) return ''
   const sign = v > 0 ? '+' : v < 0 ? '-' : ''
-  return sign + formatCount(Math.abs(v))
+  return sign + formatCount(Math.abs(v || 0))
 }
 
 function deltaClass(v) {
-  if (v === null || v === 0) return ''
+  if (v === 0) return 'is-flat'
   return v > 0 ? 'is-up' : 'is-down'
 }
 
@@ -1017,6 +1015,7 @@ onUnmounted(() => {
 }
 .delta-badge.is-up { color: #e05252; }
 .delta-badge.is-down { color: #1fa463; }
+.delta-badge.is-flat { color: #a8b0bb; }
 /* 运营管理：更新节奏 / 责任人上下两行标签 */
 .rhythm-owner-cell { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
 .management-tag-wrap { display: inline-flex; cursor: pointer; width: 84px; }

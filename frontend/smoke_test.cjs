@@ -419,15 +419,15 @@ async function main() {
     const snapBtns = page.locator('.adm-cell-actions button').filter({ hasText: '快照' })
     ok('账号行含历史快照入口', accRows === 0 ? await snapBtns.count() === 0 : await snapBtns.count() >= 1,
        'rows=' + accRows + ' buttons=' + await snapBtns.count())
-    // 增量角标：无历史快照的账号不显示；有 deltas 时数值右上角渲染 ± 值
+    // 增量角标：三列常驻，有快照渲染 ± 值；无变化 / 无快照显示 0 占位
     const apiAccounts = await page.evaluate(async (t) =>
       (await (await fetch('/api/publish-accounts', { headers: { Authorization: 'Bearer ' + t } })).json()), token)
-    const withDelta = (apiAccounts || []).filter((a) => a.deltas)
     const badgeCount = await page.locator('.delta-badge').count()
-    ok('增量角标按快照数据渲染', withDelta.length === 0
-       ? badgeCount === 0
-       : badgeCount >= withDelta.length,
-       'withDelta=' + withDelta.length + ' badges=' + badgeCount)
+    const flatTexts = await page.locator('.delta-badge.is-flat').allInnerTexts()
+    ok('三列增量角标常驻渲染', accRows === 0 ? badgeCount === 0 : badgeCount >= accRows * 3,
+       'rows=' + accRows + ' badges=' + badgeCount)
+    ok('无变化指标显示 0 占位', flatTexts.every((t) => t.trim() === '0'),
+       'flat=' + flatTexts.length + ' texts=' + flatTexts.join(','))
     if (await snapBtns.count() > 0) {
       await snapBtns.first().click()
       await page.waitForTimeout(500)
