@@ -607,12 +607,17 @@ async function main() {
         fail('未获取到作品列表，可能未登录或主页链接无效', '请填写主页链接（https://www.douyin.com/user/...）或先完成抖音验证', true)
         return
       }
+      const collected = live.posts.slice(0, limit)
+      // list_complete：本次是否抓到了公开作品列表末尾（未被 limit 截断且抖音返回 has_more=0）。
+      // 只有完整采集才能安全地用「差集」判断隐藏视频，否则会把未抓到的正常视频误标为隐藏。
+      const listComplete = !live.postHasMore && live.postPages > 0
       out({
         ok: true,
         data: {
           sec_uid: (live.profile && live.profile.sec_uid) || payload.sec_uid || '',
           name: (live.profile && live.profile.nickname) || '',
-          videos: live.posts.slice(0, limit).map(normalizeAweme),
+          videos: collected.map(normalizeAweme),
+          list_complete: listComplete,
         },
       })
       return

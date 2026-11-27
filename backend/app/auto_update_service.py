@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from .database import SessionLocal
 from .douyin_collector import CollectError, fetch_account, fetch_account_videos
-from .models import DouyinImport, PublishAccount, PublishAccountSnapshot, PublishStat, SystemSetting
+from .models import DouyinImport, Production, PublishAccount, PublishAccountSnapshot, PublishStat, SystemSetting
 from .routers.settings import normalize_auto_update
 
 logger = logging.getLogger(__name__)
@@ -138,21 +138,25 @@ def sync_account_publish_videos(
     video_limit: int,
     fetch_fn=None,
 ) -> tuple:
-    """采集指定账号最新作品并写入发布数据表；返回 (created, updated, fetched)。
+    """采集指定账号最新作品并写入发布数据表；返回 (created, updated, fetched, hidden, restored)。
 
     手动「更新」与自动任务共用：均按配置中心的 video_limit 重新获取最新作品，
     已导入的按 video_id 更新、未导入的新增，已匹配创作的同步播放数据。
-    采集失败时抛出 CollectError，由调用方决定是否降级。
+    采集完整（抓到列表末尾）时按差集对账隐藏状态：本次未出现的历史作品标「隐藏」，
+    重新出现的恢复「正常」（平台为准）。采集失败时抛出 CollectError，由调用方决定是否降级。
     """
     fetch_list = fetch_fn or fetch_account_videos
     query = _account_query(account)
     if not query:
-        return 0, 0, 0
+        return 0, 0, 0, 0, 0
     profile_key = (account.douyin_profile or "").strip() or f"account_{account.id}"
     info = fetch_list(query, video_limit, profile_key=profile_key) or {}
     videos = info.get("videos") or []
     created, updated = _sync_publish_videos(db, videos, account, video_limit)
-    return created, updated, len(videos)
+    hidden, restored = reconcile_hidden_videos(
+        db, account, videos, bool(info.get("list_complete"))
+    )
+    return created, updated, len(videos), hidden, restored
 
 
 def _sync_publish_videos(
@@ -269,6 +273,58 @@ def _sync_publish_videos(
     return created, updated
 
 
+def reconcile_hidden_videos(
+    db: Session,
+    account: PublishAccount,
+    videos: list,
+    list_complete: bool,
+) -> tuple:
+    """按「本次公开列表」对账该账号已录入作品的隐藏状态（平台为准）。
+
+    抖音隐藏 / 删除的作品不会出现在公开列表里，无法直接读取其状态，只能靠差集推断：
+      - 本次出现的作品 → 恢复「正常」（覆盖历史手动标记，平台为准）；
+      - 本次未出现、但库里是「正常」的历史作品 → 标记「隐藏」。
+
+    仅当 list_complete 为真（采集脚本确认抓到列表末尾、未被 limit 截断）且本次
+    确实抓到作品时才执行，避免网络抖动 / 分页截断把正常作品批量误标为隐藏。
+    作用范围严格限定在该账号名下，不影响其他账号或手工录入（无 account_id）的记录。
+
+    返回 (hidden, restored) 两个计数。
+    """
+    if not list_complete:
+        return 0, 0
+    current_ids = set()
+    for raw in (videos or []):
+        if not isinstance(raw, dict):
+            continue
+        vid = str(raw.get("video_id") or "").strip()
+        if vid:
+            current_ids.add(vid)
+    if not current_ids:
+        return 0, 0
+
+    rows = db.query(DouyinImport).filter(DouyinImport.account_id == account.id).all()
+    hidden = 0
+    restored = 0
+    for row in rows:
+        old = row.data_status or "正常"
+        in_list = row.video_id in current_ids
+        new = "正常" if in_list else "隐藏"
+        if new == old:
+            continue
+        row.data_status = new
+        if row.production_id:
+            prod = db.query(Production).get(row.production_id)
+            if prod:
+                prod.data_status = new
+                prod.updated_at = datetime.now()
+        if in_list:
+            restored += 1
+        else:
+            hidden += 1
+    return hidden, restored
+
+
 def run_auto_update(
     db: Session,
     account_ids: Optional[list] = None,
@@ -356,12 +412,18 @@ def run_auto_update(
             if cfg["sync_publish_data"]:
                 try:
                     video_info = fetch_list(collect_query, cfg["video_limit"], profile_key=profile_key) or {}
+                    videos = video_info.get("videos") or []
                     created, changed = _sync_publish_videos(
-                        db, video_info.get("videos") or [], account, cfg["video_limit"]
+                        db, videos, account, cfg["video_limit"]
                     )
                     videos_created += created
                     videos_updated += changed
-                    fetched_count = len(video_info.get("videos") or [])
+                    fetched_count = len(videos)
+                    hidden, restored = reconcile_hidden_videos(
+                        db, account, videos, bool(video_info.get("list_complete"))
+                    )
+                    if hidden or restored:
+                        video_note = f"隐藏状态对账：新隐藏 {hidden} 条、恢复 {restored} 条"
                 except CollectError as exc:
                     video_note = f"发布数据同步失败：{exc.message}"
                     if getattr(exc, "need_login", False):

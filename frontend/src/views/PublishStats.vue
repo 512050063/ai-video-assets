@@ -102,7 +102,14 @@
                   <div class="pub-ref-meta">
                     <template v-if="row.reference_title">
                       <span class="pub-ref-author" :title="row.owner_name || '未配置'">@{{ row.owner_name || '未配置' }}</span>
-                      <span v-if="row.category_name" class="pub-ref-cat" :title="row.category_name">{{ row.category_name }}</span>
+                      <OptionBadge
+                        v-if="row.category_name"
+                        :name="row.category_name"
+                        :color="settings.option('category', row.category_name).color"
+                        :image="settings.option('category', row.category_name).image"
+                        :display="settings.option('category', row.category_name).display"
+                        class="pub-ref-cat"
+                      />
                     </template>
                     <span v-else class="pub-ref-meta-unset">未配置</span>
                   </div>
@@ -402,7 +409,7 @@
         <span v-if="pageBuildTime" class="auto-build-time">页面版本 {{ pageBuildTime }}</span>
       </div>
       <div class="auto-tip">
-        账号默认跟随当前账号标签，条数默认「全部」。仅能采集主页公开展示的作品；抖音「隐藏 / 仅自己可见」作品不在公开列表，无法自动获取，请在表格右上角「手动导入」中录入。
+        账号默认跟随当前账号标签，条数默认「全部」。仅能采集主页公开展示的作品；采集完整时会自动对账：已录入但不在公开列表的作品标记为「隐藏」，重新公开的自动恢复「正常」，隐藏作品不计入顶部统计。
       </div>
       <div v-if="auto.message" class="auto-error">
         {{ auto.message }}
@@ -987,7 +994,15 @@ async function fetchDouyinList() {
     auto.checked = auto.videos.map((v) => !!(autoCheckImported.value && v.imported))
     auto.message = data.message || (data.ok ? '获取完成' : '获取失败')
     auto.need_login = !!data.need_login
-    if (data.ok && auto.videos.length) ElMessage.success(`已获取 ${auto.videos.length} 条作品`)
+    const reconciled = (data.accounts || []).reduce(
+      (sum, a) => sum + (a.hidden || 0) + (a.restored || 0), 0)
+    if (data.ok && auto.videos.length) {
+      ElMessage.success(
+        `已获取 ${auto.videos.length} 条作品` +
+        (reconciled ? `，隐藏状态已同步 ${reconciled} 条` : '')
+      )
+      if (reconciled) await load()
+    }
   } catch (e) {
     auto.message = e.response?.data?.detail || '获取失败'
   } finally {
@@ -1255,13 +1270,9 @@ onMounted(async () => {
   color: var(--adm-text-secondary);
 }
 .pub-ref-cat {
-  max-width: 72px;
-  padding: 0 5px;
-  border-radius: 4px;
-  background: var(--adm-panel-soft, #f5f7fa);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 88px;
+  min-width: 0;
+  flex-shrink: 0;
 }
 .pub-ref-meta-unset { color: var(--adm-text-placeholder); }
 .pub-title-link { color: inherit; text-decoration: none; }

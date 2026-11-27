@@ -1433,8 +1433,48 @@ def run():
                 PublishAccountSnapshot.account_id == test_acc.id).order_by(
                 PublishAccountSnapshot.id.desc()).first()
             ok("快照备注含发布数据同步信息", "同步发布数据" in (snap_latest.note or ""), snap_latest.note)
+
+            # —— 隐藏视频全自动对账（平台为准）——
+            vids = [PREFIX + "recon_a", PREFIX + "recon_b", PREFIX + "recon_c"]
+            # 清空该账号已有导入记录，保证对账计数只针对本段构造的数据
+            s.query(DouyinImport).filter(DouyinImport.account_id == test_acc.id).delete(synchronize_session=False)
+            s.query(DouyinImport).filter(DouyinImport.video_id.in_(vids)).delete(synchronize_session=False)
+            s.commit()
+            for i, rv in enumerate(vids):
+                s.add(DouyinImport(video_id=rv, title=PREFIX + "对账作品" + str(i),
+                                   account_id=test_acc.id, account_name=test_acc.name,
+                                   status="待匹配", data_status="正常"))
+            # another account 记录，验证对账不误伤其它账号
+            other_vid = PREFIX + "recon_other"
+            s.query(DouyinImport).filter(DouyinImport.video_id == other_vid).delete(synchronize_session=False)
+            other_acc = s.query(PublishAccount).filter(PublishAccount.id != test_acc.id).first()
+            s.add(DouyinImport(video_id=other_vid, title=PREFIX + "其它账号",
+                               account_id=(other_acc.id if other_acc else None),
+                               status="待匹配", data_status="正常"))
+            s.commit()
+            # 采集不完整：不得对账（防抖动误标）
+            h0, r0 = aus.reconcile_hidden_videos(
+                s, test_acc, [{"video_id": vids[0]}, {"video_id": vids[1]}], False)
+            ok("采集不完整时跳过对账", h0 == 0 and r0 == 0, (h0, r0))
+            # 完整采集：只返回 A、B → C 标隐藏
+            h1, r1 = aus.reconcile_hidden_videos(
+                s, test_acc, [{"video_id": vids[0]}, {"video_id": vids[1]}], True)
+            c_row = s.query(DouyinImport).filter(DouyinImport.video_id == vids[2]).first()
+            ok("隐藏对账：未出现的历史作品标隐藏",
+               h1 == 1 and c_row is not None and c_row.data_status == "隐藏", (h1, getattr(c_row, "data_status", None)))
+            ok("对账不误伤其他账号记录",
+               s.query(DouyinImport).filter(DouyinImport.video_id == other_vid).first().data_status == "正常")
+            # 手动把 A 标隐藏，平台为准 → 重新出现应恢复
+            a_row = s.query(DouyinImport).filter(DouyinImport.video_id == vids[0]).first()
+            a_row.data_status = "隐藏"
+            s.commit()
+            h2, r2 = aus.reconcile_hidden_videos(
+                s, test_acc, [{"video_id": vids[0]}, {"video_id": vids[1]}, {"video_id": vids[2]}], True)
+            ok("隐藏对账：重新出现的作品恢复正常（平台为准）",
+               r2 >= 1 and s.query(DouyinImport).filter(DouyinImport.video_id == vids[0]).first().data_status == "正常",
+               (r2, a_row.data_status))
             # 清理本段测试写入的发布数据
-            s.query(DouyinImport).filter(DouyinImport.video_id == vid).delete()
+            s.query(DouyinImport).filter(DouyinImport.video_id.in_(vids + [vid, other_vid])).delete(synchronize_session=False)
             s.commit()
         s.close()
     except Exception as exc:

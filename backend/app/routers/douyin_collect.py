@@ -17,6 +17,7 @@ from ..auth import get_current_user, require_permission
 from ..auto_update_service import (
     create_account_snapshot,
     get_auto_update_config,
+    reconcile_hidden_videos,
     sync_account_publish_videos,
 )
 from ..database import SessionLocal, get_db
@@ -156,10 +157,12 @@ def sync_one_account(
         cfg = get_auto_update_config(db)
         if cfg["sync_publish_data"]:
             try:
-                videos_created, videos_updated, videos_fetched = sync_account_publish_videos(
+                videos_created, videos_updated, videos_fetched, hidden, restored = sync_account_publish_videos(
                     db, account, cfg["video_limit"]
                 )
                 video_note = f"同步发布数据 {videos_fetched} 条（新增 {videos_created} / 更新 {videos_updated}）"
+                if hidden or restored:
+                    video_note += f"；隐藏状态对账：新隐藏 {hidden} 条、恢复 {restored} 条"
             except CollectError as exc:
                 video_note = f"发布数据同步失败：{exc.message}"
                 if getattr(exc, "need_login", False):
@@ -230,13 +233,15 @@ def sync_all_accounts(
             fetched_video_count = 0
             if cfg["sync_publish_data"]:
                 try:
-                    created, updated, fetched = sync_account_publish_videos(
+                    created, updated, fetched, hidden, restored = sync_account_publish_videos(
                         db, account, cfg["video_limit"]
                     )
                     videos_created_total += created
                     videos_updated_total += updated
                     fetched_video_count = fetched
                     note += f"；同步发布数据 {fetched} 条"
+                    if hidden or restored:
+                        note += f"；隐藏对账：新隐藏 {hidden} 条、恢复 {restored} 条"
                 except CollectError as exc:
                     note += f"；发布数据同步失败：{exc.message}"
                     if getattr(exc, "need_login", False):
@@ -441,9 +446,17 @@ def fetch_videos_batch(
             item["account_name"] = account.name
             account_videos.append(item)
         videos.extend(account_videos)
+        # 采集完整时按公开列表对账已录入作品的隐藏状态（平台为准），
+        # 让用户「获取抖音数据」后即可看到隐藏同步结果，无需先导入。
+        hidden, restored = reconcile_hidden_videos(
+            db, account, info.get("videos") or [], bool(info.get("list_complete"))
+        )
+        note = f"获取到 {len(account_videos)} 条作品"
+        if hidden or restored:
+            note += f"；隐藏状态已同步：新隐藏 {hidden} 条、恢复 {restored} 条"
         results.append({"account_id": account_id, "name": account.name, "ok": True,
-                        "message": f"获取到 {len(account_videos)} 条作品", "need_login": False,
-                        "videos": account_videos})
+                        "message": note, "need_login": False,
+                        "videos": account_videos, "hidden": hidden, "restored": restored})
     db.commit()
     videos = _mark_imported_flags(db, videos)
 
