@@ -979,6 +979,11 @@ onMounted(async () => {
   flex-wrap: wrap;
   padding: 12px 4px 4px;
   margin-top: 6px;
+  /* 矮屏下吸附在弹窗内容区底部，避免按钮随长表单滚出视口 */
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  background: var(--adm-surface-solid, #fff);
 }
 /* 底部按钮统一样式：胶囊、同高、主色系 */
 .edit-dialog-footer .el-button {

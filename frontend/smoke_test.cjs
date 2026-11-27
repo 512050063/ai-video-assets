@@ -638,6 +638,9 @@ async function main() {
       await page.waitForTimeout(600)
       const cdlg = page.locator('.edit-dialog:visible')
       ok('新建弹窗打开', await cdlg.count() === 1)
+      // 矮屏兼容：底部操作区 sticky 吸附，长表单滚动时按钮常驻可见
+      ok('编辑弹窗底部按钮区 sticky 吸附（矮屏可见）',
+         await cdlg.locator('.edit-dialog-footer').evaluate((el) => getComputedStyle(el).position) === 'sticky')
       const cLabels = await cdlg.locator('.el-form-item__label').allTextContents()
       ok('新建弹窗不显示封面/作者/创作人', !cLabels.some((l) => /封面|作者|创作人/.test(l)), cLabels.join(','))
       // 必填校验：直接提交应被拦截
